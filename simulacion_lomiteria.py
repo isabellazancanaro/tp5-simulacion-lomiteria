@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any
@@ -73,26 +74,60 @@ def rk_local(a_val: int, h: float = 0.01):
 # ── simulación ────────────────────────────────────────────────────────────────
 
 RENAME = {
+    "iteracion": "Iteracion",
+    "evento": "Evento",
+    "reloj_seg": "Reloj (seg)",
+    "hora": "Hora",
     "r1_llg": "RND 1 llegada",
     "r2_llg": "RND 2 llegada",
     "tel": "Tiempo entre llegadas",
+    "prox_llg": "Proxima Llegada",
     "r_tipo": "RND tipo",
+    "tipo_pedido": "Tipo de Pedido",
     "r_caja": "RND atencion",
     "ta_caja": "Tiempo atencion",
+    "fin_caja": "Fin Atencion Caja",
     "r_A": "RND CL",
     "A": "Valor de A",
     "tp_prep": "Tiempo de Preparacion CL",
-    "r_llevar": "RND Para Llevar",
+    "fin_prep_local": "Fin Preparacion CL",
+    "r1_llevar": "RND1 Para Llevar",
+    "r2_llevar": "RND2 Para Llevar",
     "tp_llevar": "Tiempo Preparacion Llevar",
+    "fin_prep_llevar": "Fin Preparacion Llevar",
     "r_salon": "RND Salon",
+    "salon_elegido": "Salon",
     "r_sal1": "RND1 Permanencia",
     "r_sal2": "RND2 Permanencia",
     "tp_sal": "Tiempo Permanencia Salon",
+    "fin_sal": "Fin Permanencia Salon",
+    "caja_est": "Estado Caja",
+    "caja_ini": "Hr Inicio Ocupacion",
+    "caja_ac": "AC Tiempo Ocupado",
     "cola_caja": "Cola Caja",
+    "max_cola_caja": "MAX Cola Caja",
+    "m1_est": "M1 Estado", "m2_est": "M2 Estado", "m3_est": "M3 Estado",
+    "m1_ini": "M1 Hr Inicio", "m2_ini": "M2 Hr Inicio", "m3_ini": "M3 Hr Inicio",
+    "m1_ac": "M1 AC", "m2_ac": "M2 AC", "m3_ac": "M3 AC",
     "cola_most": "Cola Mostrador",
+    "max_cola_most": "MAX Cola Mostrador",
     "r_ocup": "Salon Rojo Ocupados",
+    "r_esp": "Salon Rojo Esperando",
+    "r_ac_lleno": "AC Salon Rojo Lleno",
     "a_ocup": "Salon Azul Ocupados",
+    "a_esp": "Salon Azul Esperando",
+    "a_ac_lleno": "AC Salon Azul Lleno",
+    "ac_perm": "AC Permanencia", "n_perm": "N Permanencia",
+    "ac_cc": "AC Cola Caja", "n_cc": "N Cola Caja",
+    "ac_cm": "AC Cola Mostrador", "n_cm": "N Cola Mostrador",
+    "n_llevar": "N Para Llevar", "n_local": "N Local",
+    "n_rojo": "N Salon Rojo", "n_azul": "N Salon Azul",
     "vivos": "Clientes Vivos",
+}
+
+CLI_FIELD_LABELS = {
+    "id": "ID", "est": "Estado", "llg": "Hora Llegada",
+    "t_cc": "T Cola Caja", "perm": "Permanencia",
 }
 
 
@@ -161,9 +196,9 @@ def simular(p: dict) -> dict:
         c["t_cm"] = ahora - c["llg_most"]
         ac_cm += c["t_cm"]; n_cm += 1
         if c["tipo"] == "llevar":
-            r, tp = uniforme(p["llevar_a"], p["llevar_b"], rng)
+            r1l, r2l, tp = normal_pos(p["llevar_a"], p["llevar_b"], rng)
             fin_pl = ahora + tp
-            last.update({"r_llevar": r, "tp_llevar": tp, "fin_prep_llevar": round(fin_pl, 2)})
+            last.update({"r1_llevar": r1l, "r2_llevar": r2l, "tp_llevar": tp, "fin_prep_llevar": round(fin_pl, 2)})
         else:
             ra, av = unif_disc(2, 5, rng)
             tp, rk = rk_local(av, p["h_rk"])
@@ -189,7 +224,7 @@ def simular(p: dict) -> dict:
         r1s, r2s, tp = normal_pos(med, dev, rng)
         c["fin_salon"] = ahora + tp
         salida_sal[cid] = c["fin_salon"]
-        last.update({"r_sal1": r1s, "r_sal2": r2s, "tp_sal": tp})
+        last.update({"r_sal1": r1s, "r_sal2": r2s, "tp_sal": tp, "fin_sal": round(c["fin_salon"], 2)})
         if c["salon"] == "rojo":
             salon_r.add(cid)
             if len(salon_r) >= p["cap_r"] and salon_r_lleno_ini is None:
@@ -230,7 +265,7 @@ def simular(p: dict) -> dict:
             "fin_caja": clientes[caja_cli]["fin_caja"] if caja_cli in clientes else None,
             # rk / llevar
             "r_A": last.get("r_A"), "A": last.get("A"),
-            "r_llevar": last.get("r_llevar"),
+            "r1_llevar": last.get("r1_llevar"), "r2_llevar": last.get("r2_llevar"),
             "tp_prep": last.get("tp"),
             "fin_prep_local":  last.get("fin_prep_local"),
             "tp_llevar":       last.get("tp_llevar"),
@@ -240,13 +275,16 @@ def simular(p: dict) -> dict:
             "r_salon": last.get("r_salon"),
             "r_sal1": last.get("r_sal1"), "r_sal2": last.get("r_sal2"),
             "tp_sal": last.get("tp_sal"),
+            "fin_sal": last.get("fin_sal"),
             # caja estado
             "caja_est": caja_est, "caja_cli": caja_cli,
+            "caja_ini": None if caja_ini is None else round(caja_ini, 2),
             "cola_caja": len(cola_caja), "max_cola_caja": max_cc,
             "caja_ac": round(caja_ac,2),
             # mostrador
             **{f"m{i+1}_est":   mostr[i]["est"]               for i in range(3)},
             **{f"m{i+1}_cli":   mostr[i]["cli"]               for i in range(3)},
+            **{f"m{i+1}_ini":   None if mostr[i]["ini"] is None else round(mostr[i]["ini"],2) for i in range(3)},
             **{f"m{i+1}_fin":   None if mostr[i]["fin"]==INF else round(mostr[i]["fin"],2) for i in range(3)},
             **{f"m{i+1}_ac":    round(mostr[i]["ac"],2)       for i in range(3)},
             "cola_most": len(cola_most), "max_cola_most": max_cm,
@@ -262,14 +300,13 @@ def simular(p: dict) -> dict:
             "n_rojo": n_rojo,     "n_azul":  n_azul,
             "vivos": len(clientes),
         }
-        # clientes vivos (hasta 3 visibles)
-        vivos = list(clientes.values())[:3]
-        for k, cv in enumerate(vivos, 1):
-            row[f"cli{k}_id"]    = cv["id"]
-            row[f"cli{k}_est"]   = cv["est"]
-            row[f"cli{k}_llg"]   = fmt(cv["llg"])
-            row[f"cli{k}_t_cc"]  = round(cv.get("t_cc", 0), 2)
-            row[f"cli{k}_perm"]  = round(cv.get("perm", 0), 2)
+        # clientes vivos
+        for k, cv in enumerate(clientes.values(), 1):
+            row[f"cli{k}_id"]   = cv["id"]
+            row[f"cli{k}_est"]  = cv["est"]
+            row[f"cli{k}_llg"]  = fmt(cv["llg"])
+            row[f"cli{k}_t_cc"] = round(cv.get("t_cc", 0), 2)
+            row[f"cli{k}_perm"] = round(cv.get("perm", 0), 2)
         vector.append(row)
 
     # fila inicial
@@ -398,6 +435,13 @@ def simular(p: dict) -> dict:
         "Salón azul":                       n_azul,
     }
     df_vector = pd.DataFrame(vector).rename(columns=RENAME)
+    cli_rename = {}
+    for col in df_vector.columns:
+        m = re.match(r"cli(\d+)_(id|est|llg|t_cc|perm)", col)
+        if m:
+            k, campo = m.groups()
+            cli_rename[col] = f"C{k} {CLI_FIELD_LABELS[campo]}"
+    df_vector = df_vector.rename(columns=cli_rename)
     return {
         "vector": df_vector,
         "ctrl_most": pd.DataFrame(ctrl_most) if ctrl_most else pd.DataFrame(),
@@ -405,6 +449,68 @@ def simular(p: dict) -> dict:
         "rk":        pd.DataFrame(rk_rows)   if rk_rows   else pd.DataFrame(),
         "metricas":  metricas,
     }
+
+# ── tabla multinivel ───────────────────────────────────────────────────────────
+
+GRUPOS = [
+    ("", ["Iteracion", "Evento", "Reloj (seg)", "Hora"]),
+    ("Proxima Llegada", ["RND 1 llegada", "RND 2 llegada", "Tiempo entre llegadas", "Proxima Llegada"]),
+    ("Fin Atencion Caja", ["RND tipo", "Tipo de Pedido", "RND atencion", "Tiempo atencion", "Fin Atencion Caja"]),
+    ("Consumo Local", ["RND CL", "Valor de A", "Tiempo de Preparacion CL", "Fin Preparacion CL"]),
+    ("Para Llevar", ["RND1 Para Llevar", "RND2 Para Llevar", "Tiempo Preparacion Llevar", "Fin Preparacion Llevar"]),
+    ("Permanencia Salon", ["RND Salon", "Salon", "RND1 Permanencia", "RND2 Permanencia", "Tiempo Permanencia Salon", "Fin Permanencia Salon"]),
+    ("Empleado Caja", ["Estado Caja", "Hr Inicio Ocupacion", "AC Tiempo Ocupado", "Cola Caja", "MAX Cola Caja"]),
+    ("Mostrador 1", ["M1 Estado", "M1 Hr Inicio", "M1 AC"]),
+    ("Mostrador 2", ["M2 Estado", "M2 Hr Inicio", "M2 AC"]),
+    ("Mostrador 3", ["M3 Estado", "M3 Hr Inicio", "M3 AC"]),
+    ("Cola Mostrador", ["Cola Mostrador", "MAX Cola Mostrador"]),
+    ("Salon Rojo", ["Salon Rojo Ocupados", "Salon Rojo Esperando", "AC Salon Rojo Lleno"]),
+    ("Salon Azul", ["Salon Azul Ocupados", "Salon Azul Esperando", "AC Salon Azul Lleno"]),
+    ("Acumuladores", ["AC Permanencia", "N Permanencia", "AC Cola Caja", "N Cola Caja", "AC Cola Mostrador", "N Cola Mostrador", "N Para Llevar", "N Local", "N Salon Rojo", "N Salon Azul"]),
+]
+
+
+def grupos_con_clientes(df: pd.DataFrame) -> list:
+    cli_nums = sorted({int(m.group(1)) for c in df.columns if (m := re.match(r"C(\d+) ID", c))})
+    grupos = list(GRUPOS)
+    for k in cli_nums:
+        grupos.append((f"Cliente {k}", [f"C{k} ID", f"C{k} Estado", f"C{k} Hora Llegada", f"C{k} T Cola Caja", f"C{k} Permanencia"]))
+    return grupos
+
+
+def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
+    header1 = ""
+    header2 = ""
+    for grupo, subcols in grupos:
+        presentes = [c for c in subcols if c in df.columns]
+        if not presentes:
+            continue
+        header1 += f'<th colspan="{len(presentes)}" style="text-align:center;border:1px solid #444;padding:4px;background:#2d2d2d">{grupo}</th>'
+        for sc in presentes:
+            header2 += f'<th style="text-align:center;border:1px solid #444;padding:4px;white-space:pre-wrap;max-width:80px;font-size:0.75em">{sc.replace(" ", "<br>")}</th>'
+
+    rows = ""
+    for _, row in df.iterrows():
+        rows += "<tr>"
+        for grupo, subcols in grupos:
+            for sc in subcols:
+                if sc in df.columns:
+                    val = row.get(sc, "")
+                    rows += f'<td style="text-align:center;border:1px solid #333;padding:3px;font-size:0.8em">{val}</td>'
+        rows += "</tr>"
+
+    html = f"""
+    <div style="overflow-x:auto">
+    <table style="border-collapse:collapse;width:100%;font-family:monospace">
+        <thead>
+            <tr>{header1}</tr>
+            <tr>{header2}</tr>
+        </thead>
+        <tbody>{rows}</tbody>
+    </table>
+    </div>
+    """
+    return html
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
@@ -432,9 +538,9 @@ with st.sidebar:
     st.subheader("Tipo de pedido")
     prob_llevar = st.slider("% Para llevar", 0, 100, 25) / 100
 
-    st.subheader("Preparación para llevar (Uniforme)")
-    llevar_a = st.number_input("Mín llevar (seg)", value=100.0, min_value=0.0)
-    llevar_b = st.number_input("Máx llevar (seg)", value=140.0, min_value=0.1)
+    st.subheader("Preparación para llevar (Normal)")
+    llevar_a = st.number_input("Media llevar (seg)", value=100.0, min_value=0.0)
+    llevar_b = st.number_input("Desvío llevar (seg)", value=20.0, min_value=0.1)
 
     st.subheader("Runge-Kutta (consumo local)")
     h_rk = st.number_input("Paso h", value=0.01, min_value=0.0001, format="%.4f")
@@ -461,7 +567,6 @@ with st.sidebar:
 errores = []
 if h_fin <= h_ini: errores.append("Hora fin debe ser mayor que hora inicio.")
 if caja_b <= caja_a: errores.append("Máx caja debe ser > Mín caja.")
-if llevar_b <= llevar_a: errores.append("Máx llevar debe ser > Mín llevar.")
 
 if errores:
     for e in errores:
@@ -515,17 +620,20 @@ with tab1:
     subset = df.iloc[j:j+i]
     ultima = df.iloc[[-1]]
 
+    grupos_subset = grupos_con_clientes(subset)
+
     st.subheader("Iteraciones seleccionadas")
-    st.dataframe(subset.fillna("").reset_index(drop=True), use_container_width=True, height=400, hide_index=True)
+    st.markdown(render_tabla_multinivel(subset.fillna(""), grupos_subset), unsafe_allow_html=True)
 
     st.subheader("Última fila (fin de simulación)")
     # en última fila ocultar columnas temporales de RNDs
     cols_temp = ["RND 1 llegada","RND 2 llegada","Tiempo entre llegadas",
                  "RND tipo","RND atencion","Tiempo atencion",
-                 "RND CL","Valor de A","RND Para Llevar","Tiempo Preparacion Llevar",
+                 "RND CL","Valor de A","RND1 Para Llevar","RND2 Para Llevar","Tiempo Preparacion Llevar",
                  "Tiempo de Preparacion CL","RND Salon","RND1 Permanencia","RND2 Permanencia","Tiempo Permanencia Salon"]
-    st.dataframe(ultima.drop(columns=[c for c in cols_temp if c in ultima.columns]).fillna("").reset_index(drop=True),
-                 use_container_width=True, hide_index=True)
+    grupos_ultima = [(g, [c for c in subs if c not in cols_temp]) for g, subs in grupos_con_clientes(ultima)]
+    grupos_ultima = [(g, subs) for g, subs in grupos_ultima if subs]
+    st.markdown(render_tabla_multinivel(ultima.fillna(""), grupos_ultima), unsafe_allow_html=True)
 
 # ── TAB 2: Métricas ───────────────────────────────────────────────────────────
 with tab2:
@@ -571,14 +679,14 @@ with tab5:
     df = res["vector"]
 
     st.subheader("Cola caja a lo largo del tiempo")
-    st.line_chart(df.set_index("reloj_seg")["Cola Caja"])
+    st.line_chart(df.set_index("Reloj (seg)")["Cola Caja"])
 
     st.subheader("Cola mostrador a lo largo del tiempo")
-    st.line_chart(df.set_index("reloj_seg")["Cola Mostrador"])
+    st.line_chart(df.set_index("Reloj (seg)")["Cola Mostrador"])
 
     st.subheader("Ocupación salones")
-    sal_df = df[["reloj_seg","Salon Rojo Ocupados","Salon Azul Ocupados"]]
-    st.line_chart(sal_df.set_index("reloj_seg"))
+    sal_df = df[["Reloj (seg)","Salon Rojo Ocupados","Salon Azul Ocupados"]]
+    st.line_chart(sal_df.set_index("Reloj (seg)"))
 
     st.subheader("Clientes vivos en el sistema")
-    st.area_chart(df.set_index("reloj_seg")["Clientes Vivos"])
+    st.area_chart(df.set_index("Reloj (seg)")["Clientes Vivos"])
