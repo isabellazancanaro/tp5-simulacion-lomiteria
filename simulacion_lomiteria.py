@@ -136,7 +136,7 @@ def simular(p: dict) -> dict:
     prox_ctrl_m = p["hora_inicio"] + p["ctrl_most"]
     prox_ctrl_s = p["hora_inicio"] + p["ctrl_sal"]
 
-    last: dict = {}
+    last: dict = {"r1_llg": r1, "r2_llg": r2, "tel": tel}
 
     def libre_most():
         for i, e in enumerate(mostr):
@@ -398,6 +398,27 @@ def simular(p: dict) -> dict:
         "Salón azul":                       n_azul,
     }
     df_vector = pd.DataFrame(vector).rename(columns=RENAME)
+
+    # columnas que NO deben redondearse (contadores, colas, estados, ids, etc.)
+    cols_enteras = {
+        "iteracion", "evento", "hora",
+        "Cola Caja", "max_cola_caja", "Cola Mostrador", "max_cola_most",
+        "Salon Rojo Ocupados", "Salon Azul Ocupados", "r_esp", "a_esp",
+        "n_perm", "n_cc", "n_cm", "n_llevar", "n_local", "n_rojo", "n_azul",
+        "Clientes Vivos", "caja_est", "caja_cli",
+        "Valor de A",
+        "m1_est","m2_est","m3_est","m1_cli","m2_cli","m3_cli",
+        "tipo_pedido", "salon_elegido",
+    }
+    # agregar dinámicamente las columnas de clientes vivos (cli1_id, cli2_est, etc.)
+    cols_enteras |= {c for c in df_vector.columns if c.startswith("cli") and ("_id" in c or "_est" in c)}
+
+    cols_float = [
+        c for c in df_vector.columns
+        if c not in cols_enteras and pd.api.types.is_numeric_dtype(df_vector[c])
+    ]
+    df_vector[cols_float] = df_vector[cols_float].round(2)
+
     return {
         "vector": df_vector,
         "ctrl_most": pd.DataFrame(ctrl_most) if ctrl_most else pd.DataFrame(),
