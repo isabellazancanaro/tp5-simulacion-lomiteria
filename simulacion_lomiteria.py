@@ -72,6 +72,30 @@ def rk_local(a_val: int, h: float = 0.01):
 
 # ── simulación ────────────────────────────────────────────────────────────────
 
+RENAME = {
+    "r1_llg": "RND 1 llegada",
+    "r2_llg": "RND 2 llegada",
+    "tel": "Tiempo entre llegadas",
+    "r_tipo": "RND tipo",
+    "r_caja": "RND atencion",
+    "ta_caja": "Tiempo atencion",
+    "r_A": "RND CL",
+    "A": "Valor de A",
+    "tp_prep": "Tiempo de Preparacion CL",
+    "r_llevar": "RND Para Llevar",
+    "tp_llevar": "Tiempo Preparacion Llevar",
+    "r_salon": "RND Salon",
+    "r_sal1": "RND1 Permanencia",
+    "r_sal2": "RND2 Permanencia",
+    "tp_sal": "Tiempo Permanencia Salon",
+    "cola_caja": "Cola Caja",
+    "cola_most": "Cola Mostrador",
+    "r_ocup": "Salon Rojo Ocupados",
+    "a_ocup": "Salon Azul Ocupados",
+    "vivos": "Clientes Vivos",
+}
+
+
 def simular(p: dict) -> dict:
     rng = random.Random(p["semilla"])
     reloj = p["hora_inicio"]
@@ -138,12 +162,13 @@ def simular(p: dict) -> dict:
         ac_cm += c["t_cm"]; n_cm += 1
         if c["tipo"] == "llevar":
             r, tp = uniforme(p["llevar_a"], p["llevar_b"], rng)
-            last.update({"r_llevar": r, "tp": tp})
+            fin_pl = ahora + tp
+            last.update({"r_llevar": r, "tp_llevar": tp, "fin_prep_llevar": round(fin_pl, 2)})
         else:
             ra, av = unif_disc(2, 5, rng)
             tp, rk = rk_local(av, p["h_rk"])
             rk_rows.extend(rk)
-            last.update({"r_A": ra, "A": av, "tp": tp})
+            last.update({"r_A": ra, "A": av, "tp": tp, "fin_prep_local": round(ahora + tp, 2)})
         c["fin_prep"] = ahora + tp
         mostr[ei].update({"est":"ocupado","cli":cid,"ini":ahora,"fin":c["fin_prep"]})
 
@@ -207,6 +232,10 @@ def simular(p: dict) -> dict:
             "r_A": last.get("r_A"), "A": last.get("A"),
             "r_llevar": last.get("r_llevar"),
             "tp_prep": last.get("tp"),
+            "fin_prep_local":  last.get("fin_prep_local"),
+            "tp_llevar":       last.get("tp_llevar"),
+            "fin_prep_llevar": last.get("fin_prep_llevar"),
+            "salon_elegido":   last.get("salon_elegido"),
             # salon rnd
             "r_salon": last.get("r_salon"),
             "r_sal1": last.get("r_sal1"), "r_sal2": last.get("r_sal2"),
@@ -297,7 +326,7 @@ def simular(p: dict) -> dict:
                 c["salon"] = "rojo" if rs < p["prob_rojo"] else "azul"
                 if c["salon"] == "rojo": n_rojo += 1
                 else: n_azul += 1
-                last.update({"r_tipo":rt,"tipo_pedido":"local","r_salon":rs})
+                last.update({"r_tipo":rt,"tipo_pedido":"local","r_salon":rs,"salon_elegido":c["salon"]})
             # liberar caja
             if caja_ini is not None:
                 caja_ac += reloj - caja_ini
@@ -368,8 +397,9 @@ def simular(p: dict) -> dict:
         "Salón rojo":                       n_rojo,
         "Salón azul":                       n_azul,
     }
+    df_vector = pd.DataFrame(vector).rename(columns=RENAME)
     return {
-        "vector": pd.DataFrame(vector),
+        "vector": df_vector,
         "ctrl_most": pd.DataFrame(ctrl_most) if ctrl_most else pd.DataFrame(),
         "ctrl_sal":  pd.DataFrame(ctrl_sal)  if ctrl_sal  else pd.DataFrame(),
         "rk":        pd.DataFrame(rk_rows)   if rk_rows   else pd.DataFrame(),
@@ -486,14 +516,16 @@ with tab1:
     ultima = df.iloc[[-1]]
 
     st.subheader("Iteraciones seleccionadas")
-    st.dataframe(subset, use_container_width=True, height=400)
+    st.dataframe(subset.fillna("").reset_index(drop=True), use_container_width=True, height=400, hide_index=True)
 
     st.subheader("Última fila (fin de simulación)")
     # en última fila ocultar columnas temporales de RNDs
-    cols_temp = ["r1_llg","r2_llg","tel","r_tipo","r_caja","ta_caja",
-                 "r_A","A","r_llevar","tp_prep","r_salon","r_sal1","r_sal2","tp_sal"]
-    st.dataframe(ultima.drop(columns=[c for c in cols_temp if c in ultima.columns]),
-                 use_container_width=True)
+    cols_temp = ["RND 1 llegada","RND 2 llegada","Tiempo entre llegadas",
+                 "RND tipo","RND atencion","Tiempo atencion",
+                 "RND CL","Valor de A","RND Para Llevar","Tiempo Preparacion Llevar",
+                 "Tiempo de Preparacion CL","RND Salon","RND1 Permanencia","RND2 Permanencia","Tiempo Permanencia Salon"]
+    st.dataframe(ultima.drop(columns=[c for c in cols_temp if c in ultima.columns]).fillna("").reset_index(drop=True),
+                 use_container_width=True, hide_index=True)
 
 # ── TAB 2: Métricas ───────────────────────────────────────────────────────────
 with tab2:
@@ -539,15 +571,14 @@ with tab5:
     df = res["vector"]
 
     st.subheader("Cola caja a lo largo del tiempo")
-    st.line_chart(df.set_index("reloj_seg")["cola_caja"])
+    st.line_chart(df.set_index("reloj_seg")["Cola Caja"])
 
     st.subheader("Cola mostrador a lo largo del tiempo")
-    st.line_chart(df.set_index("reloj_seg")["cola_most"])
+    st.line_chart(df.set_index("reloj_seg")["Cola Mostrador"])
 
     st.subheader("Ocupación salones")
-    sal_df = df[["reloj_seg","r_ocup","a_ocup"]].rename(
-        columns={"r_ocup":"Salón Rojo","a_ocup":"Salón Azul"})
+    sal_df = df[["reloj_seg","Salon Rojo Ocupados","Salon Azul Ocupados"]]
     st.line_chart(sal_df.set_index("reloj_seg"))
 
     st.subheader("Clientes vivos en el sistema")
-    st.area_chart(df.set_index("reloj_seg")["vivos"])
+    st.area_chart(df.set_index("reloj_seg")["Clientes Vivos"])
