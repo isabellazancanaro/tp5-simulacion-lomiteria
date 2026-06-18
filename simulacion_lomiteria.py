@@ -417,7 +417,7 @@ def simular(p: dict) -> dict:
         caja_ini = ahora
 
         # Guarda los valores aleatorios para que salgan en la fila del vector de estado.
-        last.update({"r_caja": r, "ta_caja": ta})
+        last.update({"r_caja": round(r, 2), "ta_caja": round(ta, 2)})
 
     def ini_prep(cid, ei, ahora):
         """
@@ -444,7 +444,7 @@ def simular(p: dict) -> dict:
             # llevar_a actúa como media y llevar_b como desvío estándar.
             r1l, r2l, tp = normal_pos(p["llevar_a"], p["llevar_b"], rng)
             fin_pl = ahora + tp
-            last.update({"r1_llevar": r1l, "r2_llevar": r2l, "tp_llevar": tp, "fin_prep_llevar": round(fin_pl, 2)})
+            last.update({"r1_llevar": round(r1l, 2), "r2_llevar": round(r2l, 2), "tp_llevar": round(tp, 2), "fin_prep_llevar": round(fin_pl, 2)})
         else:
             # Preparación para consumo local: se genera A y luego se calcula RK.
             ra, av = unif_disc(2, 5, rng)
@@ -457,9 +457,9 @@ def simular(p: dict) -> dict:
 
             # Se guardan RND, A, tiempo de preparación y fin de preparación local.
             last.update({
-                "r_A": ra,
+                "r_A": round(ra, 2),
                 "A": av,
-                "tp": tp,
+                "tp": round(tp, 2),
                 "fin_prep_local": round(ahora + tp, 2),
             })
 
@@ -511,7 +511,7 @@ def simular(p: dict) -> dict:
 
         # Registra el próximo evento de salida de salón para este cliente.
         salida_sal[cid] = c["fin_salon"]
-        last.update({"r_sal1": r1s, "r_sal2": r2s, "tp_sal": tp, "fin_sal": round(c["fin_salon"], 2)})
+        last.update({"r_sal1": round(r1s, 2), "r_sal2": round(r2s, 2), "tp_sal": round(tp, 2), "fin_sal": round(c["fin_salon"], 2)})
         if c["salon"] == "rojo":
             salon_r.add(cid)
 
@@ -592,7 +592,7 @@ def simular(p: dict) -> dict:
             # Caja: RND, tiempo de atención y próximo fin de atención.
             "r_caja": last.get("r_caja"),
             "ta_caja": last.get("ta_caja"),
-            "fin_caja": clientes[caja_cli]["fin_caja"] if caja_cli in clientes else None,
+            "fin_caja": round(clientes[caja_cli]["fin_caja"], 2) if caja_cli in clientes else None,
             # Preparación local mediante RK y preparación para llevar.
             "r_A": last.get("r_A"), "A": last.get("A"),
             "r1_llevar": last.get("r1_llevar"), "r2_llevar": last.get("r2_llevar"),
@@ -727,7 +727,7 @@ def simular(p: dict) -> dict:
             # Se programa la próxima llegada.
             r1, r2, tel = normal_pos(p["media_llg"], p["desv_llg"], rng)
             prox_llg = reloj + tel
-            last.update({"r1_llg": r1, "r2_llg": r2, "tel": tel})
+            last.update({"r1_llg": round(r1, 2), "r2_llg": round(r2, 2), "tel": round(tel, 2)})
 
         elif ev == "fin_caja":
             # -----------------------------------------------------------------
@@ -744,7 +744,7 @@ def simular(p: dict) -> dict:
             if rt < p["prob_llevar"]:
                 c["tipo"] = "llevar"
                 n_llevar += 1
-                last.update({"r_tipo": rt, "tipo_pedido": "llevar"})
+                last.update({"r_tipo": round(rt, 2), "tipo_pedido": "llevar"})
             else:
                 c["tipo"] = "local"
                 n_local += 1
@@ -759,9 +759,9 @@ def simular(p: dict) -> dict:
                     n_azul += 1
 
                 last.update({
-                    "r_tipo": rt,
+                    "r_tipo": round(rt, 2),
                     "tipo_pedido": "local",
-                    "r_salon": rs,
+                    "r_salon": round(rs, 2),
                     "salon_elegido": c["salon"],
                 })
 
