@@ -146,8 +146,8 @@ def rk_local(a_val: int, h: float = 0.01):
     # rows guarda la tabla completa de Runge-Kutta para poder mostrarla en Streamlit.
     rows = []
 
-    # Avanza hasta que L supere 10.
-    while l <= 10:
+    # Avanza hasta que L_sig supere 10, cortando en la misma fila donde ocurre.
+    while True:
         k1 = f(t, l)
         k2 = f(t + h/2, l + h*k1/2)
         k3 = f(t + h/2, l + h*k2/2)
@@ -157,7 +157,7 @@ def rk_local(a_val: int, h: float = 0.01):
         l2 = l + (h/6) * (k1 + 2*k2 + 2*k3 + k4)
         t2 = t + h
 
-        # Guarda una fila de la tabla de RK.
+        # Guarda la fila actual (puede ser la que supera 10).
         rows.append({
             "A": a_val,
             "t": round(t, 4),
@@ -172,6 +172,10 @@ def rk_local(a_val: int, h: float = 0.01):
 
         # Actualiza t y L para el próximo paso.
         t, l = t2, l2
+
+        # Corta en la misma iteración donde L superó 10, sin continuar.
+        if l > 10:
+            break
 
     # Como t = 1 equivale a 10 minutos, se convierte t a segundos multiplicando por 600.
     return t * 600, rows
@@ -332,6 +336,7 @@ def simular(p: dict) -> dict:
 
     # rk_rows guarda todas las filas de Runge-Kutta generadas para pedidos locales.
     rk_rows: List[dict] = []
+    rk_calculados: set = set()  # valores de A ya calculados, para no repetir la tabla
 
     # Controles periódicos solicitados por el enunciado.
     ctrl_most: List[dict] = []
@@ -442,8 +447,10 @@ def simular(p: dict) -> dict:
             ra, av = unif_disc(2, 5, rng)
             tp, rk = rk_local(av, p["h_rk"])
 
-            # Se agregan las filas de esta tabla RK al acumulado general.
-            rk_rows.extend(rk)
+            # Solo se agrega la tabla RK si es la primera vez que aparece este valor de A.
+            if av not in rk_calculados:
+                rk_rows.extend(rk)
+                rk_calculados.add(av)
 
             # Se guardan RND, A, tiempo de preparación y fin de preparación local.
             last.update({
