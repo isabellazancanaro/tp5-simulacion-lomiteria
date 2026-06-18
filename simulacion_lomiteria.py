@@ -745,20 +745,9 @@ def simular(p: dict) -> dict:
                 c["tipo"] = "local"
                 n_local += 1
 
-                # Si consume en local, se determina salón elegido.
-                rs = rng.random()
-                c["salon"] = "rojo" if rs < p["prob_rojo"] else "azul"
-
-                if c["salon"] == "rojo":
-                    n_rojo += 1
-                else:
-                    n_azul += 1
-
                 last.update({
                     "r_tipo": rt,
                     "tipo_pedido": "local",
-                    "r_salon": rs,
-                    "salon_elegido": c["salon"],
                 })
 
             # Se acumula el tiempo ocupado de caja para calcular ocupación.
@@ -806,6 +795,20 @@ def simular(p: dict) -> dict:
             if c["tipo"] == "llevar":
                 cerrar(cid, reloj)
             else:
+                rs = rng.random()
+
+                c["salon"] = "rojo" if rs < p["prob_rojo"] else "azul"
+
+                if c["salon"] == "rojo":
+                    n_rojo += 1
+                else:
+                    n_azul += 1
+
+                last.update({
+                    "r_salon": rs,
+                    "salon_elegido": c["salon"],
+                })
+
                 intentar_salon(cid, reloj)
 
             # Si había cola de mostrador, el empleado toma al siguiente cliente.
