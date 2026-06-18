@@ -985,11 +985,11 @@ def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
 # A partir de acá se construye la interfaz visual con Streamlit.
 
 # Título principal de la aplicación.
-st.title("🥩 Simulación Lomitería – TP5 Grupo 22")
+st.title("Simulación Lomitería – TP5 Grupo 22")
 
 # Panel lateral donde el usuario carga los parámetros de la simulación.
 with st.sidebar:
-    st.header("⚙️ Parámetros")
+    st.header("Parámetros")
 
     # Semilla usada para reproducir la misma secuencia de números aleatorios.
     semilla = st.number_input("Semilla aleatoria", value=22, step=1)
@@ -1110,11 +1110,11 @@ i = st.session_state["i"]
 
 # Crea las pestañas de visualización.
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📋 Vector de Estado",
-    "📊 Métricas",
-    "🕐 Controles Periódicos",
-    "🔢 Runge-Kutta",
-    "📈 Gráficos",
+    "Vector de Estado",
+    "Métricas",
+    "Controles Periódicos",
+    "Runge-Kutta",
+    "Gráficos",
 ])
 
 # ── TAB 1: Vector de Estado ───────────────────────────────────────────────────
