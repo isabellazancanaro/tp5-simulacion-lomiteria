@@ -236,17 +236,20 @@ RENAME = {
     "m1_ac": "M1 AC", "m2_ac": "M2 AC", "m3_ac": "M3 AC",
     "cola_most": "Cola Mostrador",
     "max_cola_most": "MAX Cola Mostrador",
-    "r_ocup": "Salon Rojo Ocupados",
-    "r_esp": "Salon Rojo Esperando",
-    "r_ac_lleno": "AC Salon Rojo Lleno",
-    "a_ocup": "Salon Azul Ocupados",
-    "a_esp": "Salon Azul Esperando",
-    "a_ac_lleno": "AC Salon Azul Lleno",
-    "ac_perm": "AC Permanencia", "n_perm": "N Permanencia",
-    "ac_cc": "AC Cola Caja", "n_cc": "N Cola Caja",
-    "ac_cm": "AC Cola Mostrador", "n_cm": "N Cola Mostrador",
-    "n_llevar": "N Para Llevar", "n_local": "N Local",
-    "n_rojo": "N Salon Rojo", "n_azul": "N Salon Azul",
+    "r_estado":    "Salon Rojo Estado",
+    "r_ocup":      "Salon Rojo Cantidad Espacio Ocupado",
+    "r_esp":       "Salon Rojo Cola Esperando",
+    "r_lleno_ini": "Salon Rojo Hr Inicio Lleno",
+    "r_ac_lleno":  "Salon Rojo AC Tiempo Lleno",
+    "a_estado":    "Salon Azul Estado",
+    "a_ocup":      "Salon Azul Cantidad Espacio Ocupado",
+    "a_esp":       "Salon Azul Cola Esperando",
+    "a_lleno_ini": "Salon Azul Hr Inicio Lleno",
+    "a_ac_lleno":  "Salon Azul AC Tiempo Lleno",
+    "ac_perm": "AC Tiempo Permanencia en Negocio",
+    "n_perm":  "N Clientes Finalizados",
+    "ac_cc":   "AC Tiempo Espera Cola Caja",
+    "n_cc":    "N Clientes Atendidos en Caja",
     "vivos": "Clientes Vivos",
 }
 
@@ -538,7 +541,7 @@ def simular(p: dict) -> dict:
         caja_ini = ahora
 
         # Guarda los valores aleatorios para que salgan en la fila del vector de estado.
-        last.update({"r_caja": r, "ta_caja": ta})
+        last.update({"r_caja": round(r, 2), "ta_caja": round(ta, 2)})
 
     def ini_prep(cid, ei, ahora):
         """
@@ -589,9 +592,9 @@ def simular(p: dict) -> dict:
 
             # Se guardan RND, A, tiempo de preparación y fin de preparación local.
             last.update({
-                "r_A": ra,
+                "r_A": round(ra, 2),
                 "A": av,
-                "tp": tp,
+                "tp": round(tp, 2),
                 "fin_prep_local": round(ahora + tp, 2),
             })
 
@@ -761,8 +764,7 @@ def simular(p: dict) -> dict:
             # Caja: RND, tiempo de atención y próximo fin de atención.
             "r_caja": last.get("r_caja"),
             "ta_caja": last.get("ta_caja"),
-            "fin_caja": clientes[caja_cli]["fin_caja"] if caja_cli in clientes else None,
-            
+            "fin_caja": round(clientes[caja_cli]["fin_caja"], 2) if caja_cli in clientes else None,
             # Preparación local mediante RK y preparación para llevar.
             "r_A": last.get("r_A"), 
             "A": last.get("A"),
@@ -823,15 +825,16 @@ def simular(p: dict) -> dict:
             **{f"m{i+1}_ac":    round(mostr[i]["ac"],2)       for i in range(3)},
             "cola_most": len(cola_most), "max_cola_most": max_cm,
             # Ocupación y esperas de los salones.
+            "r_estado": "lleno" if len(salon_r) >= p["cap_r"] else "con capacidad",
+            "a_estado": "lleno" if len(salon_a) >= p["cap_a"] else "con capacidad",
             "r_ocup": len(salon_r), "a_ocup": len(salon_a),
             "r_esp": len(esp_r),    "a_esp": len(esp_a),
+            "r_lleno_ini": round(salon_r_lleno_ini, 2) if salon_r_lleno_ini is not None else None,
+            "a_lleno_ini": round(salon_a_lleno_ini, 2) if salon_a_lleno_ini is not None else None,
             "r_ac_lleno": round(ac_r_lleno,2), "a_ac_lleno": round(ac_a_lleno,2),
             # Acumuladores y contadores usados para calcular métricas finales.
             "ac_perm": round(ac_perm,2),  "n_perm":  n_perm,
             "ac_cc":   round(ac_cc,2),    "n_cc":    n_cc,
-            "ac_cm":   round(ac_cm,2),    "n_cm":    n_cm,
-            "n_llevar": n_llevar, "n_local": n_local,
-            "n_rojo": n_rojo,     "n_azul":  n_azul,
             "vivos": len(clientes),
         }
         # Clientes vivos en el sistema.
@@ -955,7 +958,7 @@ def simular(p: dict) -> dict:
             if rt < p["prob_llevar"]:
                 c["tipo"] = "llevar"
                 n_llevar += 1
-                last.update({"r_tipo": rt, "tipo_pedido": "llevar"})
+                last.update({"r_tipo": round(rt, 2), "tipo_pedido": "llevar"})
             else:
                 c["tipo"] = "local"
                 n_local += 1
@@ -970,9 +973,9 @@ def simular(p: dict) -> dict:
                     n_azul += 1
 
                 last.update({
-                    "r_tipo": rt,
+                    "r_tipo": round(rt, 2),
                     "tipo_pedido": "local",
-                    "r_salon": rs,
+                    "r_salon": round(rs, 2),
                     "salon_elegido": c["salon"],
                 })
 
@@ -1170,22 +1173,9 @@ GRUPOS = [
     ("Mostrador 3", ["M3 Estado", "M3 Hr Inicio", "M3 AC"]),
 
     ("Cola Mostrador", ["Cola Mostrador", "MAX Cola Mostrador"]),
-
-    ("Salon Rojo", [
-        "Salon Rojo Ocupados", "Salon Rojo Esperando", "AC Salon Rojo Lleno"
-    ]),
-
-    ("Salon Azul", [
-        "Salon Azul Ocupados", "Salon Azul Esperando", "AC Salon Azul Lleno"
-    ]),
-
-    ("Acumuladores", [
-        "AC Permanencia", "N Permanencia",
-        "AC Cola Caja", "N Cola Caja",
-        "AC Cola Mostrador", "N Cola Mostrador",
-        "N Para Llevar", "N Local",
-        "N Salon Rojo", "N Salon Azul"
-    ]),
+    ("Salon Rojo", ["Salon Rojo Estado", "Salon Rojo Cantidad Espacio Ocupado", "Salon Rojo Cola Esperando", "Salon Rojo Hr Inicio Lleno", "Salon Rojo AC Tiempo Lleno"]),
+    ("Salon Azul", ["Salon Azul Estado", "Salon Azul Cantidad Espacio Ocupado", "Salon Azul Cola Esperando", "Salon Azul Hr Inicio Lleno", "Salon Azul AC Tiempo Lleno"]),
+    ("Acumuladores", ["AC Tiempo Permanencia en Negocio", "N Clientes Finalizados", "AC Tiempo Espera Cola Caja", "N Clientes Atendidos en Caja"]),
 ]
 
 
@@ -1482,7 +1472,7 @@ with tab5:
     st.line_chart(df.set_index("Reloj (seg)")["Cola Mostrador"])
 
     st.subheader("Ocupación salones")
-    sal_df = df[["Reloj (seg)","Salon Rojo Ocupados","Salon Azul Ocupados"]]
+    sal_df = df[["Reloj (seg)","Salon Rojo Cantidad Espacio Ocupado","Salon Azul Cantidad Espacio Ocupado"]]
     st.line_chart(sal_df.set_index("Reloj (seg)"))
 
     st.subheader("Clientes vivos en el sistema")
