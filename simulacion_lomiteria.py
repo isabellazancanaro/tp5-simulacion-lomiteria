@@ -8,7 +8,7 @@ from __future__ import annotations
 # 1) Llega al negocio.
 # 2) Hace cola y paga en caja.
 # 3) Pasa al mostrador para esperar/preparar su pedido.
-# 4) Si es para llevar, se va cuando termina la preparación.
+# 4) Si es para llevar, se prepara con la distribución configurada y se va al finalizar.
 # 5) Si consume en el local, elige salón rojo o azul, permanece un tiempo y luego se va.
 #
 # Además, el aplicativo muestra:
@@ -18,9 +18,10 @@ from __future__ import annotations
 # - Tablas de Runge-Kutta para pedidos consumidos en local.
 # - Gráficos simples de evolución del sistema.
 
-# Librerías matemáticas y aleatorias.
+# Librerías matemáticas, aleatorias y de expresiones regulares.
 import math
 import random
+# re se usa para detectar y renombrar dinámicamente las columnas de clientes vivos.
 import re
 from collections import deque
 
@@ -179,7 +180,8 @@ def rk_local(a_val: int, h: float = 0.01):
 # ── simulación ────────────────────────────────────────────────────────────────
 
 # Diccionario usado para cambiar nombres internos de columnas por nombres más claros
-# al momento de mostrar el vector de estado.
+# al momento de mostrar el vector de estado. La simulación trabaja con nombres cortos
+# internos, pero la interfaz muestra nombres más legibles para la entrega.
 RENAME = {
     "iteracion": "Iteracion",
     "evento": "Evento",
@@ -232,6 +234,8 @@ RENAME = {
     "vivos": "Clientes Vivos",
 }
 
+# Etiquetas usadas para renombrar las columnas dinámicas de clientes vivos.
+# Ejemplo: cli3_t_cc pasa a mostrarse como C3 T Cola Caja.
 CLI_FIELD_LABELS = {
     "id": "ID", "est": "Estado", "llg": "Hora Llegada",
     "t_cc": "T Cola Caja", "perm": "Permanencia",
@@ -428,6 +432,8 @@ def simular(p: dict) -> dict:
         n_cm += 1
 
         if c["tipo"] == "llevar":
+            # Preparación para llevar en esta versión: normal positiva.
+            # llevar_a actúa como media y llevar_b como desvío estándar.
             r1l, r2l, tp = normal_pos(p["llevar_a"], p["llevar_b"], rng)
             fin_pl = ahora + tp
             last.update({"r1_llevar": r1l, "r2_llevar": r2l, "tp_llevar": tp, "fin_prep_llevar": round(fin_pl, 2)})
@@ -554,7 +560,7 @@ def simular(p: dict) -> dict:
         - estado de mostrador,
         - estado de salones,
         - acumuladores de métricas,
-        - algunos clientes vivos.
+        - todos los clientes vivos presentes en el sistema.
         """
         row = {
             # Datos generales de la fila.
@@ -577,7 +583,7 @@ def simular(p: dict) -> dict:
             "r_caja": last.get("r_caja"),
             "ta_caja": last.get("ta_caja"),
             "fin_caja": clientes[caja_cli]["fin_caja"] if caja_cli in clientes else None,
-            # rk / llevar
+            # Preparación local mediante RK y preparación para llevar.
             "r_A": last.get("r_A"), "A": last.get("A"),
             "r1_llevar": last.get("r1_llevar"), "r2_llevar": last.get("r2_llevar"),
             "tp_prep": last.get("tp"),
@@ -592,23 +598,23 @@ def simular(p: dict) -> dict:
             "r_sal2": last.get("r_sal2"),
             "tp_sal": last.get("tp_sal"),
             "fin_sal": last.get("fin_sal"),
-            # caja estado
+            # Estado de la caja, cola de caja y acumulador de ocupación.
             "caja_est": caja_est, "caja_cli": caja_cli,
             "caja_ini": None if caja_ini is None else round(caja_ini, 2),
             "cola_caja": len(cola_caja), "max_cola_caja": max_cc,
             "caja_ac": round(caja_ac,2),
-            # mostrador
+            # Estado de los tres empleados del mostrador.
             **{f"m{i+1}_est":   mostr[i]["est"]               for i in range(3)},
             **{f"m{i+1}_cli":   mostr[i]["cli"]               for i in range(3)},
             **{f"m{i+1}_ini":   None if mostr[i]["ini"] is None else round(mostr[i]["ini"],2) for i in range(3)},
             **{f"m{i+1}_fin":   None if mostr[i]["fin"]==INF else round(mostr[i]["fin"],2) for i in range(3)},
             **{f"m{i+1}_ac":    round(mostr[i]["ac"],2)       for i in range(3)},
             "cola_most": len(cola_most), "max_cola_most": max_cm,
-            # salones
+            # Ocupación y esperas de los salones.
             "r_ocup": len(salon_r), "a_ocup": len(salon_a),
             "r_esp": len(esp_r),    "a_esp": len(esp_a),
             "r_ac_lleno": round(ac_r_lleno,2), "a_ac_lleno": round(ac_a_lleno,2),
-            # métricas
+            # Acumuladores y contadores usados para calcular métricas finales.
             "ac_perm": round(ac_perm,2),  "n_perm":  n_perm,
             "ac_cc":   round(ac_cc,2),    "n_cc":    n_cc,
             "ac_cm":   round(ac_cm,2),    "n_cm":    n_cm,
@@ -616,7 +622,9 @@ def simular(p: dict) -> dict:
             "n_rojo": n_rojo,     "n_azul":  n_azul,
             "vivos": len(clientes),
         }
-        # clientes vivos
+        # Clientes vivos en el sistema.
+        # A diferencia de versiones anteriores, acá no se limita a 3 clientes:
+        # se crean columnas dinámicas para todos los clientes que todavía no se fueron.
         for k, cv in enumerate(clientes.values(), 1):
             row[f"cli{k}_id"]   = cv["id"]
             row[f"cli{k}_est"]  = cv["est"]
@@ -896,6 +904,9 @@ def simular(p: dict) -> dict:
     }
 
 # ── tabla multinivel ───────────────────────────────────────────────────────────
+# Estas estructuras permiten mostrar el vector de estado con encabezados agrupados.
+# La simulación sigue generando un DataFrame normal, pero esta sección lo renderiza
+# como una tabla HTML con grupos como "Proxima Llegada", "Empleado Caja", etc.
 
 GRUPOS = [
     ("", ["Iteracion", "Evento", "Reloj (seg)", "Hora"]),
@@ -916,6 +927,12 @@ GRUPOS = [
 
 
 def grupos_con_clientes(df: pd.DataFrame) -> list:
+    """
+    Agrega grupos de columnas para los clientes vivos que aparezcan en el DataFrame.
+
+    Como la cantidad de clientes vivos cambia durante la simulación, sus columnas
+    no pueden estar fijas en GRUPOS. Por eso se detectan con una expresión regular.
+    """
     cli_nums = sorted({int(m.group(1)) for c in df.columns if (m := re.match(r"C(\d+) ID", c))})
     grupos = list(GRUPOS)
     for k in cli_nums:
@@ -924,6 +941,13 @@ def grupos_con_clientes(df: pd.DataFrame) -> list:
 
 
 def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
+    """
+    Construye una tabla HTML con dos niveles de encabezado.
+
+    Primer nivel: grupo de columnas.
+    Segundo nivel: nombre específico de cada columna.
+    Se usa HTML porque st.dataframe no permite encabezados agrupados de esta forma.
+    """
     header1 = ""
     header2 = ""
     for grupo, subcols in grupos:
@@ -992,6 +1016,8 @@ with st.sidebar:
     prob_llevar = st.slider("% Para llevar", 0, 100, 25) / 100
 
     st.subheader("Preparación para llevar (Normal)")
+    # En esta versión se interpreta la preparación para llevar como normal positiva.
+    # llevar_a = media; llevar_b = desvío.
     llevar_a = st.number_input("Media llevar (seg)", value=100.0, min_value=0.0)
     llevar_b = st.number_input("Desvío llevar (seg)", value=20.0, min_value=0.1)
 
@@ -1106,13 +1132,16 @@ with tab1:
     # Última fila, correspondiente al fin de simulación.
     ultima = df.iloc[[-1]]
 
+    # Genera los grupos de columnas, incluyendo los clientes vivos que aparezcan
+    # dentro del intervalo seleccionado.
     grupos_subset = grupos_con_clientes(subset)
 
     st.subheader("Iteraciones seleccionadas")
     st.markdown(render_tabla_multinivel(subset.fillna(""), grupos_subset), unsafe_allow_html=True)
 
     st.subheader("Última fila (fin de simulación)")
-    # en última fila ocultar columnas temporales de RNDs
+    # En la última fila se ocultan columnas temporales de RNDs, porque el enunciado
+    # permite no mostrar objetos/variables temporales en la fila final.
     cols_temp = ["RND 1 llegada","RND 2 llegada","Tiempo entre llegadas",
                  "RND tipo","RND atencion","Tiempo atencion",
                  "RND CL","Valor de A","RND1 Para Llevar","RND2 Para Llevar","Tiempo Preparacion Llevar",
