@@ -717,9 +717,9 @@ def simular(p: dict) -> dict:
         """
         nonlocal ac_perm, n_perm, salon_r_lleno_ini, salon_a_lleno_ini, ac_r_lleno, ac_a_lleno
 
-        # Se elimina el cliente de clientes vivos.
-        c = clientes.pop(cid)
-        c["est"] = "fue"
+        # Se marca como retirado pero se mantiene en el diccionario para estabilidad de columnas.
+        c = clientes[cid]
+        c["est"] = "retirado"
         c["salida"] = r2(ahora)
 
         # Permanencia total en el negocio.
@@ -857,12 +857,18 @@ def simular(p: dict) -> dict:
         # Clientes vivos en el sistema.
         # A diferencia de versiones anteriores, acá no se limita a 3 clientes:
         # se crean columnas dinámicas para todos los clientes que todavía no se fueron.
-        for k, cv in enumerate(clientes.values(), 1):
-            row[f"cli{k}_id"]   = cv["id"]
-            row[f"cli{k}_est"]  = cv["est"]
-            row[f"cli{k}_llg"]  = fmt(cv["llg"])
-            row[f"cli{k}_t_cc"] = r2(cv.get("t_cc", 0))
-            row[f"cli{k}_perm"] = r2(cv.get("perm", 0))
+        # Clientes vivos y retirados: columna fija por ID real.
+        # Los retirados mantienen sus columnas con estado "retirado".
+        # Solo clientes activos (no retirados) con columna fija por ID real.
+        for cv in clientes.values():
+            if cv["est"] == "retirado":
+                continue
+            cid = cv["id"]
+            row[f"cli{cid}_id"]   = cv["id"]
+            row[f"cli{cid}_est"]  = cv["est"]
+            row[f"cli{cid}_llg"]  = fmt(cv["llg"])
+            row[f"cli{cid}_t_cc"] = r2(cv.get("t_cc", 0))
+            row[f"cli{cid}_perm"] = r2(cv.get("perm", 0))
         vector.append(row)
 
     # -------------------------------------------------------------------------
@@ -1221,41 +1227,35 @@ def grupos_con_clientes(df: pd.DataFrame) -> list:
 
 
 def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
-    """
-    Construye una tabla HTML con dos niveles de encabezado.
-
-    Primer nivel: grupo de columnas.
-    Segundo nivel: nombre específico de cada columna.
-    Se usa HTML porque st.dataframe no permite encabezados agrupados de esta forma.
-    """
-    header1 = ""
-    header2 = ""
+    header1_parts = []
+    header2_parts = []
     for grupo, subcols in grupos:
         presentes = [c for c in subcols if c in df.columns]
         if not presentes:
             continue
-        header1 += f'<th colspan="{len(presentes)}" style="text-align:center;border:1px solid #444;padding:4px;background:#2d2d2d">{grupo}</th>'
+        header1_parts.append(f'<th colspan="{len(presentes)}" style="text-align:center;border:1px solid #444;padding:4px;background:#2d2d2d">{grupo}</th>')
         for sc in presentes:
-            header2 += f'<th style="text-align:center;border:1px solid #444;padding:4px;white-space:pre-wrap;max-width:80px;font-size:0.75em">{sc.replace(" ", "<br>")}</th>'
+            header2_parts.append(f'<th style="text-align:center;border:1px solid #444;padding:4px;white-space:pre-wrap;max-width:80px;font-size:0.75em">{sc.replace(" ", "<br>")}</th>')
 
-    rows = ""
+    # Precalcula las columnas presentes para no repetir el chequeo por cada fila
+    cols_ordenadas = [sc for _, subcols in grupos for sc in subcols if sc in df.columns]
+
+    row_parts = []
     for _, row in df.iterrows():
-        rows += "<tr>"
-        for grupo, subcols in grupos:
-            for sc in subcols:
-                if sc in df.columns:
-                    val = row.get(sc, "")
-                    rows += f'<td style="text-align:center;border:1px solid #333;padding:3px;font-size:0.8em">{val}</td>'
-        rows += "</tr>"
+        cells = "".join(
+            f'<td style="text-align:center;border:1px solid #333;padding:3px;font-size:0.8em">{row.get(sc, "")}</td>'
+            for sc in cols_ordenadas
+        )
+        row_parts.append(f"<tr>{cells}</tr>")
 
     html = f"""
     <div style="overflow-x:auto">
     <table style="border-collapse:collapse;width:100%;font-family:monospace">
         <thead>
-            <tr>{header1}</tr>
-            <tr>{header2}</tr>
+            <tr>{"".join(header1_parts)}</tr>
+            <tr>{"".join(header2_parts)}</tr>
         </thead>
-        <tbody>{rows}</tbody>
+        <tbody>{"".join(row_parts)}</tbody>
     </table>
     </div>
     """
@@ -1389,12 +1389,11 @@ j = st.session_state["j"]
 i = st.session_state["i"]
 
 # Crea las pestañas de visualización.
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4 = st.tabs([
     "Vector de Estado",
     "Métricas",
     "Controles Periódicos",
-    "Runge-Kutta",
-    "Gráficos",
+    "Runge-Kutta"
 ])
 
 # ── TAB 1: Vector de Estado ───────────────────────────────────────────────────
@@ -1408,6 +1407,11 @@ with tab1:
 
     # Selecciona i filas a partir de j.
     subset = df.iloc[j:j+i]
+
+    # Elimina columnas de clientes que no tienen ningún dato en este subset.
+    cols_cli = [c for c in subset.columns if re.match(r"C\d+ (ID|Estado|Hora Llegada|T Cola Caja|Permanencia)", c)]
+    cols_cli_vacias = [c for c in cols_cli if subset[c].isna().all()]
+    subset = subset.drop(columns=cols_cli_vacias)
 
     # Última fila, correspondiente al fin de simulación.
     ultima = df.iloc[[-1]]
@@ -1487,20 +1491,3 @@ with tab4:
     else:
         st.info("No se calcularon tablas RK en esta simulación")
 
-# ── TAB 5: Gráficos ───────────────────────────────────────────────────────────
-with tab5:
-    # Gráficos simples generados a partir del vector de estado.
-    df = res["vector"]
-
-    st.subheader("Cola caja a lo largo del tiempo")
-    st.line_chart(df.set_index("Reloj (seg)")["Cola Caja"])
-
-    st.subheader("Cola mostrador a lo largo del tiempo")
-    st.line_chart(df.set_index("Reloj (seg)")["Cola Mostrador"])
-
-    st.subheader("Ocupación salones")
-    sal_df = df[["Reloj (seg)","Salon Rojo Cantidad Espacio Ocupado","Salon Azul Cantidad Espacio Ocupado"]]
-    st.line_chart(sal_df.set_index("Reloj (seg)"))
-
-    st.subheader("Clientes vivos en el sistema")
-    st.area_chart(df.set_index("Reloj (seg)")["Clientes Vivos"])
