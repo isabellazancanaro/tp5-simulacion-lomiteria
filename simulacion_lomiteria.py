@@ -52,25 +52,29 @@ def fmt(seg: float) -> str:
     s = int(round(seg))
     return f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
 
+#Generacion VA>0 Distribucion Normal
+def normal_box_muller_par(media: float, desv: float, rng: random.Random):
 
-def normal_pos(media: float, desv: float, rng: random.Random):
-    """
-    Genera una variable aleatoria normal positiva.
-
-    Se usa el método de Box-Muller:
-    - r1 y r2 son los números aleatorios usados.
-    - z es una normal estándar.
-    - v = media + desvío * z.
-
-    Como el enunciado pide tiempos normales mayores a cero, si el valor generado
-    es negativo o cero se descarta y se vuelve a generar.
-    """
     while True:
-        r1, r2 = rng.random(), rng.random()
-        z = math.sqrt(-2 * math.log(r1)) * math.cos(2 * math.pi * r2)
-        v = media + desv * z
-        if v > 0:
-            return r1, r2, v
+        rnd1 = rng.random()
+        rnd2 = rng.random()
+
+        raiz = math.sqrt(-2 * math.log(rnd1))
+
+        va1 = raiz * math.cos(2 * math.pi * rnd2) * desv + media
+        va2 = raiz * math.sin(2 * math.pi * rnd2) * desv + media
+
+        if va1 <= 0:
+            va1 = None
+
+        if va2 <= 0:
+            va2 = None
+
+        # Si las dos dieron inválidas, se genera otro par.
+        if va1 is None and va2 is None:
+            continue
+
+        return rnd1, rnd2, va1, va2
 
 
 def uniforme(a: float, b: float, rng: random.Random):
@@ -191,9 +195,10 @@ RENAME = {
     "evento": "Evento",
     "reloj_seg": "Reloj (seg)",
     "hora": "Hora",
-    "r1_llg": "RND 1 llegada",
-    "r2_llg": "RND 2 llegada",
-    "tel": "Tiempo entre llegadas",
+    "rnd1_llg": "RND1 llegada",
+    "rnd2_llg": "RND2 llegada",
+    "va1_llg": "VA1 llegada",
+    "va2_llg": "VA2 llegada",
     "prox_llg": "Proxima Llegada",
     "r_tipo": "RND tipo",
     "tipo_pedido": "Tipo de Pedido",
@@ -204,16 +209,23 @@ RENAME = {
     "A": "Valor de A",
     "tp_prep": "Tiempo de Preparacion CL",
     "fin_prep_local": "Fin Preparacion CL",
-    "r1_llevar": "RND1 Para Llevar",
-    "r2_llevar": "RND2 Para Llevar",
-    "tp_llevar": "Tiempo Preparacion Llevar",
+    "rnd1_llevar": "RND1 Para Llevar",
+    "rnd2_llevar": "RND2 Para Llevar",
+    "va1_llevar": "VA1 Para Llevar",
+    "va2_llevar": "VA2 Para Llevar",
     "fin_prep_llevar": "Fin Preparacion Llevar",
     "r_salon": "RND Salon",
     "salon_elegido": "Salon",
-    "r_sal1": "RND1 Permanencia",
-    "r_sal2": "RND2 Permanencia",
-    "tp_sal": "Tiempo Permanencia Salon",
-    "fin_sal": "Fin Permanencia Salon",
+    "rnd1_sal_rojo": "RND1 Perm. Rojo",
+    "rnd2_sal_rojo": "RND2 Perm. Rojo",
+    "va1_sal_rojo": "VA1 Perm. Rojo",
+    "va2_sal_rojo": "VA2 Perm. Rojo",
+    "fin_sal_rojo": "Fin Perm. Rojo",
+    "rnd1_sal_azul": "RND1 Perm. Azul",
+    "rnd2_sal_azul": "RND2 Perm. Azul",
+    "va1_sal_azul": "VA1 Perm. Azul",
+    "va2_sal_azul": "VA2 Perm. Azul",
+    "fin_sal_azul": "Fin Perm. Azul",
     "caja_est": "Estado Caja",
     "caja_ini": "Hr Inicio Ocupacion",
     "caja_ac": "AC Tiempo Ocupado",
@@ -355,6 +367,108 @@ def simular(p: dict) -> dict:
     ac_cm = 0.0
     n_cm = 0
 
+    # -------------------------------------------------------------------------
+    # Memorias Box-Muller por evento normal
+    # -------------------------------------------------------------------------
+    # Cada evento normal tiene su propia memoria.
+    #
+    # La idea es trabajar como en el vector de estado de Excel:
+    # - Se generan RND1 y RND2.
+    # - Se calculan VA1 con coseno y VA2 con seno.
+    # - Se usa VA1 para calcular el próximo evento.
+    # - VA2 queda pendiente y se arrastra hasta ser usada.
+    #
+    # Hay un solo "próximo evento"; no existen próximo evento 1 y próximo evento 2.
+
+    def nueva_memoria_bm():
+        return {
+            "va2_pendiente": None,
+        }
+
+    bm_llegada = nueva_memoria_bm()
+    bm_llevar = nueva_memoria_bm()
+    bm_permanencia: Dict[tuple, dict] = {}
+
+    def programar_normal_bm(memoria: dict, media: float, desv: float, ahora: float):
+        """
+        Programa el próximo evento que usa distribución normal con Box-Muller completo.
+
+        Lógica:
+        - Si existe VA2 pendiente, se usa esa VA2 para programar el próximo evento.
+        - Si no existe VA2 pendiente, se generan RND1 y RND2.
+        - Con esos RND se calculan VA1 por coseno y VA2 por seno.
+        - Si VA1 existe, se usa VA1 ahora y VA2 queda pendiente.
+        - Si VA1 fue descartada pero VA2 existe, se usa VA2 ahora y no queda nada pendiente.
+
+        En el vector de estado:
+        - RND1, RND2 y VA1 sólo aparecen cuando se genera un nuevo par.
+        - VA2 se arrastra hasta ser usada.
+        """
+
+        # Caso 1: ya había una VA2 pendiente de una generación anterior.
+        if memoria["va2_pendiente"] is not None:
+            tiempo = memoria["va2_pendiente"]
+            proximo = ahora + tiempo
+
+            datos = {
+                "rnd1": None,
+                "rnd2": None,
+                "va1": None,
+                "va2": tiempo,
+                "normal_usada": "VA2 (sen)",
+            }
+
+            # La VA2 pendiente ya fue usada, por lo tanto se limpia.
+            memoria["va2_pendiente"] = None
+
+            return tiempo, proximo, datos
+
+        # Caso 2: no había VA2 pendiente, entonces se genera un nuevo par.
+        rnd1, rnd2, va1, va2 = normal_box_muller_par(media, desv, rng)
+
+        datos = {
+            "rnd1": rnd1,
+            "rnd2": rnd2,
+            "va1": va1,
+            "va2": va2,
+            "normal_usada": None,
+        }
+
+        # Si VA1 existe, se usa primero.
+        if va1 is not None:
+            tiempo = va1
+            datos["normal_usada"] = "VA1 (cos)"
+
+            # Si VA2 también existe, queda pendiente para la próxima ocurrencia.
+            memoria["va2_pendiente"] = va2
+
+        # Si VA1 fue descartada, necesariamente VA2 existe.
+        else:
+            tiempo = va2
+            datos["normal_usada"] = "VA2 (sen)"
+
+            # Como se usó VA2 ahora, no queda nada pendiente.
+            memoria["va2_pendiente"] = None
+
+        proximo = ahora + tiempo
+        return tiempo, proximo, datos
+    
+    def va2_pendiente_perm_salon(salon: str, ahora: float):
+        """
+        Devuelve la VA2 pendiente correspondiente al salón y a la franja horaria actual.
+
+        Se usa sólo para mostrar el arrastre visual de VA2 en el vector de estado.
+        No mezcla VA2 de rojo con azul ni de franjas horarias distintas.
+        """
+        med, dev = permanencia_params(salon, ahora)
+        clave_bm_perm = (salon, med, dev)
+
+        if clave_bm_perm not in bm_permanencia:
+            return None
+
+        return bm_permanencia[clave_bm_perm]["va2_pendiente"]
+
+
     # Contadores de tipos de pedido y salón elegido.
     n_llevar = 0
     n_local = 0
@@ -364,9 +478,14 @@ def simular(p: dict) -> dict:
     # -------------------------------------------------------------------------
     # Inicialización de próximos eventos
     # -------------------------------------------------------------------------
-    # Se genera la primera llegada antes de tomar la fila inicial del vector.
-    r1, r2, tel = normal_pos(p["media_llg"], p["desv_llg"], rng)
-    prox_llg = reloj + tel
+    # Se genera la primera llegada antes de tomar la fila inicial del vector,
+    # usando Box-Muller completo.
+    tel, prox_llg, bm_datos_llegada = programar_normal_bm(
+        bm_llegada,
+        p["media_llg"],
+        p["desv_llg"],
+        reloj
+    )
 
     # Próximos controles periódicos:
     # - cola del mostrador cada ctrl_most segundos.
@@ -374,7 +493,12 @@ def simular(p: dict) -> dict:
     prox_ctrl_m = p["hora_inicio"] + p["ctrl_most"]
     prox_ctrl_s = p["hora_inicio"] + p["ctrl_sal"]
 
-    last: dict = {"r1_llg": r1, "r2_llg": r2, "tel": tel}
+    last: dict = {
+        "rnd1_llg": bm_datos_llegada["rnd1"],
+        "rnd2_llg": bm_datos_llegada["rnd2"],
+        "va1_llg": bm_datos_llegada["va1"],
+        "va2_llg": bm_datos_llegada["va2"],
+    }
 
     def libre_most():
         """Devuelve el índice del primer empleado libre del mostrador, o None si no hay."""
@@ -437,11 +561,22 @@ def simular(p: dict) -> dict:
         n_cm += 1
 
         if c["tipo"] == "llevar":
-            # Preparación para llevar en esta versión: normal positiva.
+            # Preparación para llevar usando Box-Muller completo.
             # llevar_a actúa como media y llevar_b como desvío estándar.
-            r1l, r2l, tp = normal_pos(p["llevar_a"], p["llevar_b"], rng)
-            fin_pl = ahora + tp
-            last.update({"r1_llevar": r1l, "r2_llevar": r2l, "tp_llevar": tp, "fin_prep_llevar": round(fin_pl, 2)})
+            tp, fin_pl, bm_datos_llevar = programar_normal_bm(
+                bm_llevar,
+                p["llevar_a"],
+                p["llevar_b"],
+                ahora
+            )
+
+            last.update({
+                "rnd1_llevar": bm_datos_llevar["rnd1"],
+                "rnd2_llevar": bm_datos_llevar["rnd2"],
+                "va1_llevar": bm_datos_llevar["va1"],
+                "va2_llevar": bm_datos_llevar["va2"],
+                "fin_prep_llevar": round(fin_pl, 2),
+            })
         else:
             # Preparación para consumo local: se genera A y luego se calcula RK.
             ra, av = unif_disc(2, 5, rng)
@@ -502,13 +637,43 @@ def simular(p: dict) -> dict:
         # Obtiene media y desvío de permanencia según salón y hora actual.
         med, dev = permanencia_params(c["salon"], ahora)
 
-        # Tiempo de permanencia en salón: normal positiva.
-        r1s, r2s, tp = normal_pos(med, dev, rng)
-        c["fin_salon"] = ahora + tp
+        # Cada combinación de salón + media + desvío tiene su propia memoria Box-Muller.
+        # Esto evita mezclar una VA2 pendiente generada con una distribución con otra distinta.
+        clave_bm_perm = (c["salon"], med, dev)
+
+        if clave_bm_perm not in bm_permanencia:
+            bm_permanencia[clave_bm_perm] = nueva_memoria_bm()
+
+        # Tiempo de permanencia en salón usando Box-Muller completo.
+        tp, fin_salon, bm_datos_salon = programar_normal_bm(
+            bm_permanencia[clave_bm_perm],
+            med,
+            dev,
+            ahora
+        )
+
+        c["fin_salon"] = fin_salon
 
         # Registra el próximo evento de salida de salón para este cliente.
         salida_sal[cid] = c["fin_salon"]
-        last.update({"r_sal1": r1s, "r_sal2": r2s, "tp_sal": tp, "fin_sal": round(c["fin_salon"], 2)})
+
+        if c["salon"] == "rojo":
+            last.update({
+                "rnd1_sal_rojo": bm_datos_salon["rnd1"],
+                "rnd2_sal_rojo": bm_datos_salon["rnd2"],
+                "va1_sal_rojo": bm_datos_salon["va1"],
+                "va2_sal_rojo": bm_datos_salon["va2"],
+                "fin_sal_rojo": round(c["fin_salon"], 2),
+            })
+        else:
+            last.update({
+                "rnd1_sal_azul": bm_datos_salon["rnd1"],
+                "rnd2_sal_azul": bm_datos_salon["rnd2"],
+                "va1_sal_azul": bm_datos_salon["va1"],
+                "va2_sal_azul": bm_datos_salon["va2"],
+                "fin_sal_azul": round(c["fin_salon"], 2),
+            })
+        
         if c["salon"] == "rojo":
             salon_r.add(cid)
 
@@ -576,10 +741,17 @@ def simular(p: dict) -> dict:
             "reloj_seg": round(reloj, 2),
             "hora": fmt(reloj),
 
-            # Llegadas: RNDs y tiempo entre llegadas generado.
-            "r1_llg": last.get("r1_llg"),
-            "r2_llg": last.get("r2_llg"),
-            "tel": last.get("tel"),
+            # Llegadas: Box-Muller completo.
+            # RND1, RND2 y VA1 sólo se muestran cuando se genera un nuevo par.
+            # VA2 se arrastra visualmente mientras esté pendiente.
+            "rnd1_llg": last.get("rnd1_llg"),
+            "rnd2_llg": last.get("rnd2_llg"),
+            "va1_llg": last.get("va1_llg"),
+            "va2_llg": (
+                last.get("va2_llg")
+                if last.get("va2_llg") is not None
+                else bm_llegada["va2_pendiente"]
+            ),
             "prox_llg": round(prox_llg, 2) if prox_llg < INF else None,
 
             # Tipo de pedido: para llevar o local.
@@ -590,26 +762,59 @@ def simular(p: dict) -> dict:
             "r_caja": last.get("r_caja"),
             "ta_caja": last.get("ta_caja"),
             "fin_caja": clientes[caja_cli]["fin_caja"] if caja_cli in clientes else None,
+            
             # Preparación local mediante RK y preparación para llevar.
-            "r_A": last.get("r_A"), "A": last.get("A"),
-            "r1_llevar": last.get("r1_llevar"), "r2_llevar": last.get("r2_llevar"),
+            "r_A": last.get("r_A"), 
+            "A": last.get("A"),
+
+            # Preparación para llevar: Box-Muller completo.
+            # RND1, RND2 y VA1 sólo se muestran cuando se genera un nuevo par.
+            # VA2 se arrastra visualmente mientras esté pendiente.
+            "rnd1_llevar": last.get("rnd1_llevar"),
+            "rnd2_llevar": last.get("rnd2_llevar"),
+            "va1_llevar": last.get("va1_llevar"),
+            "va2_llevar": (
+                last.get("va2_llevar")
+                if last.get("va2_llevar") is not None
+                else bm_llevar["va2_pendiente"]
+            ),
+            "fin_prep_llevar": last.get("fin_prep_llevar"),
+
             "tp_prep": last.get("tp"),
             "fin_prep_local": last.get("fin_prep_local"),
-            "tp_llevar": last.get("tp_llevar"),
-            "fin_prep_llevar": last.get("fin_prep_llevar"),
             "salon_elegido": last.get("salon_elegido"),
 
-            # Elección y permanencia en salón.
+            # Elección de salón.
             "r_salon": last.get("r_salon"),
-            "r_sal1": last.get("r_sal1"),
-            "r_sal2": last.get("r_sal2"),
-            "tp_sal": last.get("tp_sal"),
-            "fin_sal": last.get("fin_sal"),
+
+            # Permanencia en salón rojo: Box-Muller completo.
+            "rnd1_sal_rojo": last.get("rnd1_sal_rojo"),
+            "rnd2_sal_rojo": last.get("rnd2_sal_rojo"),
+            "va1_sal_rojo": last.get("va1_sal_rojo"),
+            "va2_sal_rojo": (
+                last.get("va2_sal_rojo")
+                if last.get("va2_sal_rojo") is not None
+                else va2_pendiente_perm_salon("rojo", reloj)
+            ),
+            "fin_sal_rojo": last.get("fin_sal_rojo"),
+
+            # Permanencia en salón azul: Box-Muller completo.
+            "rnd1_sal_azul": last.get("rnd1_sal_azul"),
+            "rnd2_sal_azul": last.get("rnd2_sal_azul"),
+            "va1_sal_azul": last.get("va1_sal_azul"),
+            "va2_sal_azul": (
+                last.get("va2_sal_azul")
+                if last.get("va2_sal_azul") is not None
+                else va2_pendiente_perm_salon("azul", reloj)
+            ),
+            "fin_sal_azul": last.get("fin_sal_azul"),
+            
             # Estado de la caja, cola de caja y acumulador de ocupación.
             "caja_est": caja_est, "caja_cli": caja_cli,
             "caja_ini": None if caja_ini is None else round(caja_ini, 2),
             "cola_caja": len(cola_caja), "max_cola_caja": max_cc,
             "caja_ac": round(caja_ac,2),
+            
             # Estado de los tres empleados del mostrador.
             **{f"m{i+1}_est":   mostr[i]["est"]               for i in range(3)},
             **{f"m{i+1}_cli":   mostr[i]["cli"]               for i in range(3)},
@@ -720,10 +925,20 @@ def simular(p: dict) -> dict:
 
             nxt_id += 1
 
-            # Se programa la próxima llegada.
-            r1, r2, tel = normal_pos(p["media_llg"], p["desv_llg"], rng)
-            prox_llg = reloj + tel
-            last.update({"r1_llg": r1, "r2_llg": r2, "tel": tel})
+            # Se programa la próxima llegada usando Box-Muller completo.
+            tel, prox_llg, bm_datos_llegada = programar_normal_bm(
+                bm_llegada,
+                p["media_llg"],
+                p["desv_llg"],
+                reloj
+            )
+
+            last.update({
+                "rnd1_llg": bm_datos_llegada["rnd1"],
+                "rnd2_llg": bm_datos_llegada["rnd2"],
+                "va1_llg": bm_datos_llegada["va1"],
+                "va2_llg": bm_datos_llegada["va2"],
+            })
 
         elif ev == "fin_caja":
             # -----------------------------------------------------------------
@@ -917,19 +1132,60 @@ def simular(p: dict) -> dict:
 
 GRUPOS = [
     ("", ["Iteracion", "Evento", "Reloj (seg)", "Hora"]),
-    ("Proxima Llegada", ["RND 1 llegada", "RND 2 llegada", "Tiempo entre llegadas", "Proxima Llegada"]),
-    ("Fin Atencion Caja", ["RND tipo", "Tipo de Pedido", "RND atencion", "Tiempo atencion", "Fin Atencion Caja"]),
-    ("Consumo Local", ["RND CL", "Valor de A", "Tiempo de Preparacion CL", "Fin Preparacion CL"]),
-    ("Para Llevar", ["RND1 Para Llevar", "RND2 Para Llevar", "Tiempo Preparacion Llevar", "Fin Preparacion Llevar"]),
-    ("Permanencia Salon", ["RND Salon", "Salon", "RND1 Permanencia", "RND2 Permanencia", "Tiempo Permanencia Salon", "Fin Permanencia Salon"]),
-    ("Empleado Caja", ["Estado Caja", "Hr Inicio Ocupacion", "AC Tiempo Ocupado", "Cola Caja", "MAX Cola Caja"]),
+
+    ("Proxima Llegada", [
+        "RND1 llegada", "RND2 llegada", "VA1 llegada", "VA2 llegada", "Proxima Llegada"
+    ]),
+
+    ("Fin Atencion Caja", [
+        "RND tipo", "Tipo de Pedido", "RND atencion", "Tiempo atencion", "Fin Atencion Caja"
+    ]),
+
+    ("Consumo Local", [
+        "RND CL", "Valor de A", "Tiempo de Preparacion CL", "Fin Preparacion CL"
+    ]),
+
+    ("Para Llevar", [
+        "RND1 Para Llevar", "RND2 Para Llevar", "VA1 Para Llevar", "VA2 Para Llevar", "Fin Preparacion Llevar"
+    ]),
+
+    ("Eleccion Salon", [
+        "RND Salon", "Salon"
+    ]),
+
+    ("Permanencia Salon Rojo", [
+        "RND1 Perm. Rojo", "RND2 Perm. Rojo", "VA1 Perm. Rojo", "VA2 Perm. Rojo", "Fin Perm. Rojo"
+    ]),
+
+    ("Permanencia Salon Azul", [
+        "RND1 Perm. Azul", "RND2 Perm. Azul", "VA1 Perm. Azul", "VA2 Perm. Azul", "Fin Perm. Azul"
+    ]),
+
+    ("Empleado Caja", [
+        "Estado Caja", "Hr Inicio Ocupacion", "AC Tiempo Ocupado", "Cola Caja", "MAX Cola Caja"
+    ]),
+
     ("Mostrador 1", ["M1 Estado", "M1 Hr Inicio", "M1 AC"]),
     ("Mostrador 2", ["M2 Estado", "M2 Hr Inicio", "M2 AC"]),
     ("Mostrador 3", ["M3 Estado", "M3 Hr Inicio", "M3 AC"]),
+
     ("Cola Mostrador", ["Cola Mostrador", "MAX Cola Mostrador"]),
-    ("Salon Rojo", ["Salon Rojo Ocupados", "Salon Rojo Esperando", "AC Salon Rojo Lleno"]),
-    ("Salon Azul", ["Salon Azul Ocupados", "Salon Azul Esperando", "AC Salon Azul Lleno"]),
-    ("Acumuladores", ["AC Permanencia", "N Permanencia", "AC Cola Caja", "N Cola Caja", "AC Cola Mostrador", "N Cola Mostrador", "N Para Llevar", "N Local", "N Salon Rojo", "N Salon Azul"]),
+
+    ("Salon Rojo", [
+        "Salon Rojo Ocupados", "Salon Rojo Esperando", "AC Salon Rojo Lleno"
+    ]),
+
+    ("Salon Azul", [
+        "Salon Azul Ocupados", "Salon Azul Esperando", "AC Salon Azul Lleno"
+    ]),
+
+    ("Acumuladores", [
+        "AC Permanencia", "N Permanencia",
+        "AC Cola Caja", "N Cola Caja",
+        "AC Cola Mostrador", "N Cola Mostrador",
+        "N Para Llevar", "N Local",
+        "N Salon Rojo", "N Salon Azul"
+    ]),
 ]
 
 
@@ -1025,7 +1281,7 @@ with st.sidebar:
     st.subheader("Preparación para llevar (Normal)")
     # En esta versión se interpreta la preparación para llevar como normal positiva.
     # llevar_a = media; llevar_b = desvío.
-    llevar_a = st.number_input("Media llevar (seg)", value=100.0, min_value=0.0)
+    llevar_a = st.number_input("Media llevar (seg)", value=120.0, min_value=0.0)
     llevar_b = st.number_input("Desvío llevar (seg)", value=20.0, min_value=0.1)
 
     st.subheader("Runge-Kutta (consumo local)")
@@ -1149,13 +1405,23 @@ with tab1:
     st.subheader("Última fila (fin de simulación)")
     # En la última fila se ocultan columnas temporales de RNDs, porque el enunciado
     # permite no mostrar objetos/variables temporales en la fila final.
-    cols_temp = ["RND 1 llegada","RND 2 llegada","Tiempo entre llegadas",
-                 "RND tipo","RND atencion","Tiempo atencion",
-                 "RND CL","Valor de A","RND1 Para Llevar","RND2 Para Llevar","Tiempo Preparacion Llevar",
-                 "Tiempo de Preparacion CL","RND Salon","RND1 Permanencia","RND2 Permanencia","Tiempo Permanencia Salon"]
-    grupos_ultima = [(g, [c for c in subs if c not in cols_temp]) for g, subs in grupos_con_clientes(ultima)]
-    grupos_ultima = [(g, subs) for g, subs in grupos_ultima if subs]
-    st.markdown(render_tabla_multinivel(ultima.fillna(""), grupos_ultima), unsafe_allow_html=True)
+    cols_temp = [
+        "RND1 llegada", "RND2 llegada", "VA1 llegada", "VA2 llegada",
+        "RND tipo", "RND atencion", "Tiempo atencion",
+        "RND CL", "Valor de A", "Tiempo de Preparacion CL",
+        "RND1 Para Llevar", "RND2 Para Llevar", "VA1 Para Llevar", "VA2 Para Llevar",
+        "RND Salon",
+        "RND1 Perm. Rojo", "RND2 Perm. Rojo", "VA1 Perm. Rojo", "VA2 Perm. Rojo",
+        "RND1 Perm. Azul", "RND2 Perm. Azul", "VA1 Perm. Azul", "VA2 Perm. Azul",
+    ]
+
+    # Para la última fila se eliminan las columnas temporales.
+    ultima_visible = ultima.drop(columns=cols_temp, errors="ignore")
+
+    # Se regeneran los grupos usando solamente las columnas que quedaron visibles.
+    grupos_ultima = grupos_con_clientes(ultima_visible)
+
+    st.markdown(render_tabla_multinivel(ultima_visible.fillna(""), grupos_ultima), unsafe_allow_html=True)
 
 # ── TAB 2: Métricas ───────────────────────────────────────────────────────────
 with tab2:
