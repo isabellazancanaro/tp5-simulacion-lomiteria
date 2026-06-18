@@ -954,11 +954,19 @@ def simular(p: dict) -> dict:
             c["llg_most"] = reloj
 
             # Se determina si compra para llevar o para consumir en local.
+            # Se determina si compra para llevar o para consumir en local.
+            # En este momento sólo se define el tipo de pedido.
+            # Si es local, el salón todavía no se elige acá:
+            # se elegirá recién cuando termine la preparación en mostrador.
             rt = rng.random()
             if rt < p["prob_llevar"]:
                 c["tipo"] = "llevar"
                 n_llevar += 1
-                last.update({"r_tipo": round(rt, 2), "tipo_pedido": "llevar"})
+
+                last.update({
+                    "r_tipo": round(rt, 2),
+                    "tipo_pedido": "llevar",
+                })
             else:
                 c["tipo"] = "local"
                 n_local += 1
@@ -966,8 +974,6 @@ def simular(p: dict) -> dict:
                 last.update({
                     "r_tipo": round(rt, 2),
                     "tipo_pedido": "local",
-                    "r_salon": round(rs, 2),
-                    "salon_elegido": c["salon"],
                 })
 
             # Se acumula el tiempo ocupado de caja para calcular ocupación.
