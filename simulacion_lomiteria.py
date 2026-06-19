@@ -260,16 +260,15 @@ RENAME = {
 
     # Empleado caja
     "caja_est": "Estado Caja",
-    "caja_ini": "Tiempo Inicio OCUPADO Caja",
     "caja_ac": "AC Tiempo Ocupado Caja",
     "cola_caja": "COLA Clientes en Caja",
     "max_cola_caja": "MAX cantidad clientes cola en caja",
 
     # Empleados mostrador
     "m1_est": "M1 Estado", "m2_est": "M2 Estado", "m3_est": "M3 Estado",
-    "m1_ini": "M1 Tiempo Inicio OCUPADO", "m2_ini": "M2 Tiempo Inicio OCUPADO", "m3_ini": "M3 Tiempo Inicio OCUPADO",
     "m1_ac": "M1 AC Tiempo Ocupado", "m2_ac": "M2 AC Tiempo Ocupado", "m3_ac": "M3 AC Tiempo Ocupado",
     "cola_most": "COLA MOSTRADOR",
+    "max_cola_most": "MAX cantidad clientes cola en mostrador",
 
     # Salones
     "r_estado":    "Rojo Estado",
@@ -801,6 +800,38 @@ def simular(p: dict) -> dict:
             salon_a_lleno_ini = None
 
 
+    def ac_caja_sincronico(ahora: float) -> float:
+        """
+        Acumulador sincrónico de ocupación de caja.
+
+        caja_ac guarda los períodos ya cerrados. Si la caja está ocupada,
+        se suma además el tiempo transcurrido desde caja_ini hasta ahora,
+        sin modificar el acumulador base para evitar doble conteo cuando
+        luego ocurra el fin de atención.
+        """
+        if caja_est == "ocupado" and caja_ini is not None:
+            return r2(caja_ac + r2(ahora - caja_ini))
+        return r2(caja_ac)
+
+    def ac_mostrador_sincronico(indice: int, ahora: float) -> float:
+        """
+        Acumulador sincrónico de ocupación de un empleado de mostrador.
+
+        mostr[indice]["ac"] contiene los períodos ya finalizados. Si el
+        empleado está ocupado, se suma el tramo en curso desde su inicio
+        hasta el reloj actual.
+        """
+        empleado = mostr[indice]
+        ac_base = empleado["ac"]
+        if empleado["est"] == "ocupado" and empleado["ini"] is not None:
+            return r2(ac_base + r2(ahora - empleado["ini"]))
+        return r2(ac_base)
+
+    def ac_mostrador_total_sincronico(ahora: float) -> float:
+        """Acumulador sincrónico total de los tres empleados de mostrador."""
+        return r2(sum(ac_mostrador_sincronico(i, ahora) for i in range(3)))
+
+
     def estado_caja_vector(est: str) -> str:
         """Estados de caja según el vector final del Excel."""
         return {"libre": "L", "ocupado": "OC"}.get(est, est)
@@ -1078,9 +1109,8 @@ def simular(p: dict) -> dict:
             
             # Estado de la caja, cola de caja y acumulador de ocupación.
             "caja_est": estado_caja_vector(caja_est), "caja_cli": caja_cli,
-            "caja_ini": None if caja_ini is None else r2(caja_ini),
             "cola_caja": len(cola_caja), "max_cola_caja": max_cc,
-            "caja_ac": r2(caja_ac),
+            "caja_ac": ac_caja_sincronico(reloj),
             
             # Próximos fines de preparación por empleado.
             **{f"m{i+1}_fin":   None if mostr[i]["fin"] == INF else r2(mostr[i]["fin"]) for i in range(3)},
@@ -1088,8 +1118,7 @@ def simular(p: dict) -> dict:
             # Estado de los tres empleados del mostrador.
             **{f"m{i+1}_est":   estado_mostrador_vector(mostr[i]["est"]) for i in range(3)},
             **{f"m{i+1}_cli":   mostr[i]["cli"]               for i in range(3)},
-            **{f"m{i+1}_ini":   None if mostr[i]["ini"] is None else r2(mostr[i]["ini"]) for i in range(3)},
-            **{f"m{i+1}_ac":    r2(mostr[i]["ac"])       for i in range(3)},
+            **{f"m{i+1}_ac":    ac_mostrador_sincronico(i, reloj) for i in range(3)},
             "cola_most": len(cola_most), "max_cola_most": max_cm,
             # Ocupación y esperas de los salones.
             "r_estado": estado_salon_vector(len(salon_r), p["cap_r"]),
@@ -1102,7 +1131,7 @@ def simular(p: dict) -> dict:
             # Acumuladores y contadores usados para calcular métricas finales.
             "ac_perm": r2(ac_perm),  "n_perm":  n_perm,
             "ac_cc":   r2(ac_cc),    "n_cc":    n_cc,
-            "ac_mostr_total": r2(sum(m["ac"] for m in mostr)),
+            "ac_mostr_total": ac_mostrador_total_sincronico(reloj),
             "vivos": len(clientes_activos),
         }
 
@@ -1412,14 +1441,17 @@ def simular(p: dict) -> dict:
     if dur <= 0:
         dur = 0.01
 
-    # Tiempo ocupado total de los tres empleados de mostrador.
-    ac_m = r2(sum(m["ac"] for m in mostr))
+    # Tiempo ocupado sincrónico al instante final.
+    # Incluye tramos cerrados y, si un recurso sigue ocupado al corte,
+    # suma el tramo en curso hasta el reloj final.
+    caja_ac_final = ac_caja_sincronico(reloj)
+    ac_m = ac_mostrador_total_sincronico(reloj)
 
     metricas = {
         "Prom. permanencia negocio (seg)": r2(ac_perm / n_perm) if n_perm else 0,
         "Prom. tiempo cola caja (seg)": r2(ac_cc / n_cc) if n_cc else 0,
         "Prom. tiempo cola mostrador (seg)": r2(ac_cm / n_cm) if n_cm else 0,
-        "% Ocupación caja": r2(caja_ac / dur * 100),
+        "% Ocupación caja": r2(caja_ac_final / dur * 100),
         "% Ocupación empleados mostrador": r2(ac_m / (3 * dur) * 100),
         "Máx. cola caja": max_cc,
         "Máx. cola mostrador": max_cm,
@@ -1510,15 +1542,15 @@ GRUPOS = [
     ]),
 
     ("empleado CAJA", [
-        "Estado Caja", "Tiempo Inicio OCUPADO Caja", "AC Tiempo Ocupado Caja",
+        "Estado Caja", "AC Tiempo Ocupado Caja",
         "COLA Clientes en Caja", "MAX cantidad clientes cola en caja"
     ]),
 
-    ("Mostrador 1", ["M1 Estado", "M1 Tiempo Inicio OCUPADO", "M1 AC Tiempo Ocupado"]),
-    ("Mostrador 2", ["M2 Estado", "M2 Tiempo Inicio OCUPADO", "M2 AC Tiempo Ocupado"]),
-    ("Mostrador 3", ["M3 Estado", "M3 Tiempo Inicio OCUPADO", "M3 AC Tiempo Ocupado"]),
+    ("Mostrador 1", ["M1 Estado", "M1 AC Tiempo Ocupado"]),
+    ("Mostrador 2", ["M2 Estado", "M2 AC Tiempo Ocupado"]),
+    ("Mostrador 3", ["M3 Estado", "M3 AC Tiempo Ocupado"]),
 
-    ("empleados MOSTRADOR", ["COLA MOSTRADOR"]),
+    ("empleados MOSTRADOR", ["COLA MOSTRADOR", "MAX cantidad clientes cola en mostrador"]),
     ("ROJO", ["Rojo Estado", "Rojo Cantidad Personas en Salon", "Rojo COLA", "Rojo Tiempo inicio LLENO", "Rojo AC Tiempo Lleno"]),
     ("AZUL", ["Azul Estado", "Azul Cantidad Personas en Salon", "Azul COLA", "Azul Tiempo Inicio LLENO", "Azul AC Tiempo Lleno"]),
     ("VARIABLES ESTADISTICAS", [
@@ -1552,16 +1584,12 @@ DISPLAY_COL_LABELS = {
     "tiempo de permanencia azul 1": "tiempo de permanencia 1",
     "tiempo de permanencia azul 2": "tiempo de permanencia 2",
     "Estado Caja": "ESTADO",
-    "Tiempo Inicio OCUPADO Caja": "Tiempo Inicio OCUPADO",
     "AC Tiempo Ocupado Caja": "AC Tiempo Ocupado",
     "M1 Estado": "ESTADO",
-    "M1 Tiempo Inicio OCUPADO": "Tiempo Inicio OCUPADO",
     "M1 AC Tiempo Ocupado": "AC Tiempo Ocupado",
     "M2 Estado": "ESTADO",
-    "M2 Tiempo Inicio OCUPADO": "Tiempo Inicio OCUPADO",
     "M2 AC Tiempo Ocupado": "AC Tiempo Ocupado",
     "M3 Estado": "ESTADO",
-    "M3 Tiempo Inicio OCUPADO": "Tiempo Inicio OCUPADO",
     "M3 AC Tiempo Ocupado": "AC Tiempo Ocupado",
     "Rojo Estado": "ESTADO",
     "Rojo Cantidad Personas en Salon": "Cantidad Personas en Salon",
@@ -1573,6 +1601,7 @@ DISPLAY_COL_LABELS = {
     "Azul COLA": "COLA",
     "Azul Tiempo Inicio LLENO": "Tiempo Inicio LLENO",
     "Azul AC Tiempo Lleno": "AC Tiempo Lleno",
+    "MAX cantidad clientes cola en mostrador": "MAX cantidad clientes cola en mostrador",
 }
 
 GRUPO_COLORES = {
@@ -2007,16 +2036,45 @@ with tab1:
 # ── TAB 2: Métricas ───────────────────────────────────────────────────────────
 with tab2:
     # Muestra las métricas finales en tarjetas.
+    # Estos contadores se siguen calculando en res["metricas"],
+    # pero no se muestran en esta pestaña para dejar el resumen más limpio.
     m = res["metricas"]
-    cols = st.columns(3)
-    items = list(m.items())
+    metricas_ocultas = {
+        "Prom. tiempo cola mostrador (seg)",
+        "Clientes finalizados",
+        "Para llevar",
+        "En local",
+        "Salón rojo",
+        "Salón azul",
+    }
+    items = [(nombre, val) for nombre, val in m.items() if nombre not in metricas_ocultas]
 
-    for k, (nombre, val) in enumerate(items):
-        with cols[k % 3]:
-            if isinstance(val, float):
-                st.metric(nombre, f"{val:.2f}")
-            else:
-                st.metric(nombre, val)
+    def mostrar_metrica(nombre, val):
+        """Renderiza una métrica manteniendo el formato numérico usado en la app."""
+        if isinstance(val, float):
+            st.metric(nombre, f"{val:.2f}")
+        else:
+            st.metric(nombre, val)
+
+    # Distribución visual solicitada:
+    # fila 1: métricas 1 y 2;
+    # fila 2: métricas 3 y 4;
+    # fila 3: métricas 5 y 6;
+    # fila 4: métricas 7 y 8.
+    filas_metricas = [
+        items[0:2],
+        items[2:4],
+        items[4:6],
+        items[6:8],
+    ]
+
+    for fila in filas_metricas:
+        if not fila:
+            continue
+        cols = st.columns(len(fila))
+        for col, (nombre, val) in zip(cols, fila):
+            with col:
+                mostrar_metrica(nombre, val)
 
 # ── TAB 3: Controles Periódicos ───────────────────────────────────────────────
 with tab3:
