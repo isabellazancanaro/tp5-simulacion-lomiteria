@@ -52,34 +52,17 @@ def fmt(seg: float) -> str:
     s = int(round(seg))
     return f"{s//3600:02d}:{(s%3600)//60:02d}:{s%60:02d}"
 
-
-def r2(x):
-    """Redondea a 2 decimales preservando None e infinito."""
-    if x is None:
-        return None
-    if isinstance(x, float) and math.isinf(x):
-        return x
-    return round(x, 2)
-
-
 #Generacion VA>0 Distribucion Normal
 def normal_box_muller_par(media: float, desv: float, rng: random.Random):
 
     while True:
-        # Se redondean los RND al nacer para que el cálculo posterior
-        # use los mismos valores que se muestran en el vector de estado.
-        rnd1 = r2(rng.random())
-        rnd2 = r2(rng.random())
-
-        # Box-Muller no permite log(0). Si por redondeo RND1 queda 0.00,
-        # se descarta ese par y se genera otro.
-        if rnd1 <= 0:
-            continue
+        rnd1 = rng.random()
+        rnd2 = rng.random()
 
         raiz = math.sqrt(-2 * math.log(rnd1))
 
-        va1 = r2(raiz * math.cos(2 * math.pi * rnd2) * desv + media)
-        va2 = r2(raiz * math.sin(2 * math.pi * rnd2) * desv + media)
+        va1 = raiz * math.cos(2 * math.pi * rnd2) * desv + media
+        va2 = raiz * math.sin(2 * math.pi * rnd2) * desv + media
 
         if va1 <= 0:
             va1 = None
@@ -102,8 +85,8 @@ def uniforme(a: float, b: float, rng: random.Random):
     - r: número aleatorio usado.
     - valor generado entre a y b.
     """
-    r = r2(rng.random())
-    return r, r2(a + r * (b - a))
+    r = rng.random()
+    return r, a + r * (b - a)
 
 
 def unif_disc(a: int, b: int, rng: random.Random):
@@ -113,7 +96,7 @@ def unif_disc(a: int, b: int, rng: random.Random):
     Se usa para obtener el valor de A en los pedidos de consumo local.
     En el enunciado, A es uniforme discreto entre 2 y 5.
     """
-    r = r2(rng.random())
+    r = rng.random()
     return r, min(a + int(r * (b - a + 1)), b)
 
 
@@ -199,7 +182,7 @@ def rk_local(a_val: int, h: float = 0.01):
             break
 
     # Como t = 1 equivale a 10 minutos, se convierte t a segundos multiplicando por 600.
-    return r2(t * 600), rows
+    return t * 600, rows
 
 
 # ── simulación ────────────────────────────────────────────────────────────────
@@ -427,8 +410,8 @@ def simular(p: dict) -> dict:
 
         # Caso 1: ya había una VA2 pendiente de una generación anterior.
         if memoria["va2_pendiente"] is not None:
-            tiempo = r2(memoria["va2_pendiente"])
-            proximo = r2(ahora + tiempo)
+            tiempo = memoria["va2_pendiente"]
+            proximo = ahora + tiempo
 
             datos = {
                 "rnd1": None,
@@ -456,7 +439,7 @@ def simular(p: dict) -> dict:
 
         # Si VA1 existe, se usa primero.
         if va1 is not None:
-            tiempo = r2(va1)
+            tiempo = va1
             datos["normal_usada"] = "VA1 (cos)"
 
             # Si VA2 también existe, queda pendiente para la próxima ocurrencia.
@@ -464,13 +447,13 @@ def simular(p: dict) -> dict:
 
         # Si VA1 fue descartada, necesariamente VA2 existe.
         else:
-            tiempo = r2(va2)
+            tiempo = va2
             datos["normal_usada"] = "VA2 (sen)"
 
             # Como se usó VA2 ahora, no queda nada pendiente.
             memoria["va2_pendiente"] = None
 
-        proximo = r2(ahora + tiempo)
+        proximo = ahora + tiempo
         return tiempo, proximo, datos
     
     def va2_pendiente_perm_salon(salon: str, ahora: float):
@@ -510,8 +493,8 @@ def simular(p: dict) -> dict:
     # Próximos controles periódicos:
     # - cola del mostrador cada ctrl_most segundos.
     # - ocupación de salones cada ctrl_sal segundos.
-    prox_ctrl_m = r2(p["hora_inicio"] + p["ctrl_most"])
-    prox_ctrl_s = r2(p["hora_inicio"] + p["ctrl_sal"])
+    prox_ctrl_m = p["hora_inicio"] + p["ctrl_most"]
+    prox_ctrl_s = p["hora_inicio"] + p["ctrl_sal"]
 
     last: dict = {
         "rnd1_llg": bm_datos_llegada["rnd1"],
@@ -541,24 +524,24 @@ def simular(p: dict) -> dict:
 
         c = clientes[cid]
         c["est"] = "en_caja"
-        c["ini_caja"] = r2(ahora)
+        c["ini_caja"] = ahora
 
         # Tiempo en cola de caja = momento en que empieza atención - momento de llegada.
-        c["t_cc"] = r2(ahora - c["llg"])
-        ac_cc = r2(ac_cc + c["t_cc"])
+        c["t_cc"] = ahora - c["llg"]
+        ac_cc += c["t_cc"]
         n_cc += 1
 
         # Tiempo de atención en caja: uniforme entre caja_a y caja_b.
         r, ta = uniforme(p["caja_a"], p["caja_b"], rng)
-        c["fin_caja"] = r2(ahora + ta)
+        c["fin_caja"] = ahora + ta
 
         # Actualización del recurso caja.
         caja_est = "ocupado"
         caja_cli = cid
-        caja_ini = r2(ahora)
+        caja_ini = ahora
 
         # Guarda los valores aleatorios para que salgan en la fila del vector de estado.
-        last.update({"r_caja": r2(r), "ta_caja": r2(ta)})
+        last.update({"r_caja": round(r, 2), "ta_caja": round(ta, 2)})
 
     def ini_prep(cid, ei, ahora):
         """
@@ -573,11 +556,11 @@ def simular(p: dict) -> dict:
 
         c = clientes[cid]
         c["est"] = "prep"
-        c["ini_prep"] = r2(ahora)
+        c["ini_prep"] = ahora
 
         # Tiempo en cola del mostrador = inicio de preparación - llegada al mostrador.
-        c["t_cm"] = r2(ahora - c["llg_most"])
-        ac_cm = r2(ac_cm + c["t_cm"])
+        c["t_cm"] = ahora - c["llg_most"]
+        ac_cm += c["t_cm"]
         n_cm += 1
 
         if c["tipo"] == "llevar":
@@ -595,7 +578,7 @@ def simular(p: dict) -> dict:
                 "rnd2_llevar": bm_datos_llevar["rnd2"],
                 "va1_llevar": bm_datos_llevar["va1"],
                 "va2_llevar": bm_datos_llevar["va2"],
-                "fin_prep_llevar": r2(fin_pl),
+                "fin_prep_llevar": round(fin_pl, 2),
             })
         else:
             # Preparación para consumo local: se genera A y luego se calcula RK.
@@ -609,15 +592,15 @@ def simular(p: dict) -> dict:
 
             # Se guardan RND, A, tiempo de preparación y fin de preparación local.
             last.update({
-                "r_A": r2(ra),
+                "r_A": round(ra, 2),
                 "A": av,
-                "tp": r2(tp),
-                "fin_prep_local": r2(ahora + tp),
+                "tp": round(tp, 2),
+                "fin_prep_local": round(ahora + tp, 2),
             })
 
         # Programa el fin de preparación y ocupa al empleado correspondiente.
-        c["fin_prep"] = r2(ahora + tp)
-        mostr[ei].update({"est": "ocupado", "cli": cid, "ini": r2(ahora), "fin": c["fin_prep"]})
+        c["fin_prep"] = ahora + tp
+        mostr[ei].update({"est": "ocupado", "cli": cid, "ini": ahora, "fin": c["fin_prep"]})
 
     def intentar_salon(cid, ahora):
         """
@@ -652,7 +635,7 @@ def simular(p: dict) -> dict:
 
         c = clientes[cid]
         c["est"] = "en_salon"
-        c["ini_salon"] = r2(ahora)
+        c["ini_salon"] = ahora
 
         # Obtiene media y desvío de permanencia según salón y hora actual.
         med, dev = permanencia_params(c["salon"], ahora)
@@ -672,7 +655,7 @@ def simular(p: dict) -> dict:
             ahora
         )
 
-        c["fin_salon"] = r2(fin_salon)
+        c["fin_salon"] = fin_salon
 
         # Registra el próximo evento de salida de salón para este cliente.
         salida_sal[cid] = c["fin_salon"]
@@ -683,7 +666,7 @@ def simular(p: dict) -> dict:
                 "rnd2_sal_rojo": bm_datos_salon["rnd2"],
                 "va1_sal_rojo": bm_datos_salon["va1"],
                 "va2_sal_rojo": bm_datos_salon["va2"],
-                "fin_sal_rojo": r2(c["fin_salon"]),
+                "fin_sal_rojo": round(c["fin_salon"], 2),
             })
         else:
             last.update({
@@ -691,7 +674,7 @@ def simular(p: dict) -> dict:
                 "rnd2_sal_azul": bm_datos_salon["rnd2"],
                 "va1_sal_azul": bm_datos_salon["va1"],
                 "va2_sal_azul": bm_datos_salon["va2"],
-                "fin_sal_azul": r2(c["fin_salon"]),
+                "fin_sal_azul": round(c["fin_salon"], 2),
             })
         
         if c["salon"] == "rojo":
@@ -699,13 +682,13 @@ def simular(p: dict) -> dict:
 
             # Si el salón acaba de quedar lleno, se guarda desde cuándo está lleno.
             if len(salon_r) >= p["cap_r"] and salon_r_lleno_ini is None:
-                salon_r_lleno_ini = r2(ahora)
+                salon_r_lleno_ini = ahora
         else:
             salon_a.add(cid)
 
             # Si el salón acaba de quedar lleno, se guarda desde cuándo está lleno.
             if len(salon_a) >= p["cap_a"] and salon_a_lleno_ini is None:
-                salon_a_lleno_ini = r2(ahora)
+                salon_a_lleno_ini = ahora
 
     def cerrar(cid, ahora):
         """
@@ -717,25 +700,25 @@ def simular(p: dict) -> dict:
         """
         nonlocal ac_perm, n_perm, salon_r_lleno_ini, salon_a_lleno_ini, ac_r_lleno, ac_a_lleno
 
-        # Se marca como retirado pero se mantiene en el diccionario para estabilidad de columnas.
-        c = clientes[cid]
-        c["est"] = "retirado"
-        c["salida"] = r2(ahora)
+        # Se elimina el cliente de clientes vivos.
+        c = clientes.pop(cid)
+        c["est"] = "fue"
+        c["salida"] = ahora
 
         # Permanencia total en el negocio.
-        c["perm"] = r2(ahora - c["llg"])
-        ac_perm = r2(ac_perm + c["perm"])
+        c["perm"] = ahora - c["llg"]
+        ac_perm += c["perm"]
         n_perm += 1
 
         # Control de tiempo acumulado con salón rojo lleno.
         # Si estaba lleno y luego de la salida queda con espacio, termina el período lleno.
         if c.get("salon") == "rojo" and salon_r_lleno_ini is not None and len(salon_r) < p["cap_r"]:
-            ac_r_lleno = r2(ac_r_lleno + r2(ahora - salon_r_lleno_ini))
+            ac_r_lleno += ahora - salon_r_lleno_ini
             salon_r_lleno_ini = None
 
         # Control de tiempo acumulado con salón azul lleno.
         if c.get("salon") == "azul" and salon_a_lleno_ini is not None and len(salon_a) < p["cap_a"]:
-            ac_a_lleno = r2(ac_a_lleno + r2(ahora - salon_a_lleno_ini))
+            ac_a_lleno += ahora - salon_a_lleno_ini
             salon_a_lleno_ini = None
 
     def snap(evento):
@@ -757,8 +740,12 @@ def simular(p: dict) -> dict:
         row = {
             # Datos generales de la fila.
             "iteracion": it,
-            "evento": evento,
-            "reloj_seg": r2(reloj),
+            "evento": (
+                f"{evento}_c{last['evento_cliente_id']}"
+                if "evento_cliente_id" in last
+                else evento
+            ),
+            "reloj_seg": round(reloj, 2),
             "hora": fmt(reloj),
 
             # Llegadas: Box-Muller completo.
@@ -772,16 +759,16 @@ def simular(p: dict) -> dict:
                 if last.get("va2_llg") is not None
                 else bm_llegada["va2_pendiente"]
             ),
-            "prox_llg": r2(prox_llg) if prox_llg < INF else None,
+            "prox_llg": round(prox_llg, 2) if prox_llg < INF else None,
 
-            # Tipo de pedido: para llevar o local.
+            # Tipo de pedido: para llevar o local
             "r_tipo": last.get("r_tipo"),
             "tipo_pedido": last.get("tipo_pedido"),
 
             # Caja: RND, tiempo de atención y próximo fin de atención.
             "r_caja": last.get("r_caja"),
             "ta_caja": last.get("ta_caja"),
-            "fin_caja": r2(clientes[caja_cli]["fin_caja"]) if caja_cli in clientes else None,
+            "fin_caja": round(clientes[caja_cli]["fin_caja"], 2) if caja_cli in clientes else None,
             # Preparación local mediante RK y preparación para llevar.
             "r_A": last.get("r_A"), 
             "A": last.get("A"),
@@ -830,45 +817,39 @@ def simular(p: dict) -> dict:
             
             # Estado de la caja, cola de caja y acumulador de ocupación.
             "caja_est": caja_est, "caja_cli": caja_cli,
-            "caja_ini": None if caja_ini is None else r2(caja_ini),
+            "caja_ini": None if caja_ini is None else round(caja_ini, 2),
             "cola_caja": len(cola_caja), "max_cola_caja": max_cc,
-            "caja_ac": r2(caja_ac),
+            "caja_ac": round(caja_ac,2),
             
             # Estado de los tres empleados del mostrador.
             **{f"m{i+1}_est":   mostr[i]["est"]               for i in range(3)},
             **{f"m{i+1}_cli":   mostr[i]["cli"]               for i in range(3)},
-            **{f"m{i+1}_ini":   None if mostr[i]["ini"] is None else r2(mostr[i]["ini"]) for i in range(3)},
-            **{f"m{i+1}_fin":   None if mostr[i]["fin"]==INF else r2(mostr[i]["fin"]) for i in range(3)},
-            **{f"m{i+1}_ac":    r2(mostr[i]["ac"])       for i in range(3)},
+            **{f"m{i+1}_ini":   None if mostr[i]["ini"] is None else round(mostr[i]["ini"],2) for i in range(3)},
+            **{f"m{i+1}_fin":   None if mostr[i]["fin"]==INF else round(mostr[i]["fin"],2) for i in range(3)},
+            **{f"m{i+1}_ac":    round(mostr[i]["ac"],2)       for i in range(3)},
             "cola_most": len(cola_most), "max_cola_most": max_cm,
             # Ocupación y esperas de los salones.
             "r_estado": "lleno" if len(salon_r) >= p["cap_r"] else "con capacidad",
             "a_estado": "lleno" if len(salon_a) >= p["cap_a"] else "con capacidad",
             "r_ocup": len(salon_r), "a_ocup": len(salon_a),
             "r_esp": len(esp_r),    "a_esp": len(esp_a),
-            "r_lleno_ini": r2(salon_r_lleno_ini) if salon_r_lleno_ini is not None else None,
-            "a_lleno_ini": r2(salon_a_lleno_ini) if salon_a_lleno_ini is not None else None,
-            "r_ac_lleno": r2(ac_r_lleno), "a_ac_lleno": r2(ac_a_lleno),
+            "r_lleno_ini": round(salon_r_lleno_ini, 2) if salon_r_lleno_ini is not None else None,
+            "a_lleno_ini": round(salon_a_lleno_ini, 2) if salon_a_lleno_ini is not None else None,
+            "r_ac_lleno": round(ac_r_lleno,2), "a_ac_lleno": round(ac_a_lleno,2),
             # Acumuladores y contadores usados para calcular métricas finales.
-            "ac_perm": r2(ac_perm),  "n_perm":  n_perm,
-            "ac_cc":   r2(ac_cc),    "n_cc":    n_cc,
+            "ac_perm": round(ac_perm,2),  "n_perm":  n_perm,
+            "ac_cc":   round(ac_cc,2),    "n_cc":    n_cc,
             "vivos": len(clientes),
         }
         # Clientes vivos en el sistema.
         # A diferencia de versiones anteriores, acá no se limita a 3 clientes:
         # se crean columnas dinámicas para todos los clientes que todavía no se fueron.
-        # Clientes vivos y retirados: columna fija por ID real.
-        # Los retirados mantienen sus columnas con estado "retirado".
-        # Solo clientes activos (no retirados) con columna fija por ID real.
-        for cv in clientes.values():
-            if cv["est"] == "retirado":
-                continue
-            cid = cv["id"]
-            row[f"cli{cid}_id"]   = cv["id"]
-            row[f"cli{cid}_est"]  = cv["est"]
-            row[f"cli{cid}_llg"]  = fmt(cv["llg"])
-            row[f"cli{cid}_t_cc"] = r2(cv.get("t_cc", 0))
-            row[f"cli{cid}_perm"] = r2(cv.get("perm", 0))
+        for k, cv in enumerate(clientes.values(), 1):
+            row[f"cli{k}_id"]   = cv["id"]
+            row[f"cli{k}_est"]  = cv["est"]
+            row[f"cli{k}_llg"]  = fmt(cv["llg"])
+            row[f"cli{k}_t_cc"] = round(cv.get("t_cc", 0), 2)
+            row[f"cli{k}_perm"] = round(cv.get("perm", 0), 2)
         vector.append(row)
 
     # -------------------------------------------------------------------------
@@ -913,12 +894,12 @@ def simular(p: dict) -> dict:
 
         # Selecciona el evento con menor tiempo programado.
         ev = min(times, key=times.get)
-        reloj = r2(times[ev])
+        reloj = times[ev]
         it += 1
 
         # Si el próximo evento ocurre después del fin de simulación, se corta en fin_sim.
         if reloj >= fin:
-            reloj = r2(fin)
+            reloj = fin
             ev = "fin_sim"
 
         if ev == "llegada":
@@ -928,7 +909,7 @@ def simular(p: dict) -> dict:
             # Se crea un nuevo cliente en estado cola_caja.
             c = {
                 "id": nxt_id,
-                "llg": r2(reloj),
+                "llg": reloj,
                 "est": "cola_caja",
                 "tipo": None,
                 "salon": None,
@@ -949,6 +930,7 @@ def simular(p: dict) -> dict:
                 cola_caja.append(nxt_id)
                 max_cc = max(max_cc, len(cola_caja))
 
+            last["evento_cliente_id"] = nxt_id  
             nxt_id += 1
 
             # Se programa la próxima llegada usando Box-Muller completo.
@@ -972,21 +954,23 @@ def simular(p: dict) -> dict:
             # -----------------------------------------------------------------
             # El cliente que estaba en caja pasa al mostrador.
             nonlocal_cid = caja_cli
+            last["evento_cliente_id"] = nonlocal_cid
             c = clientes[nonlocal_cid]
             c["est"] = "cola_most"
-            c["llg_most"] = r2(reloj)
+            c["llg_most"] = reloj
 
+            # Se determina si compra para llevar o para consumir en local.
             # Se determina si compra para llevar o para consumir en local.
             # En este momento sólo se define el tipo de pedido.
             # Si es local, el salón todavía no se elige acá:
             # se elegirá recién cuando termine la preparación en mostrador.
-            rt = r2(rng.random())
+            rt = rng.random()
             if rt < p["prob_llevar"]:
                 c["tipo"] = "llevar"
                 n_llevar += 1
 
                 last.update({
-                    "r_tipo": r2(rt),
+                    "r_tipo": round(rt, 2),
                     "tipo_pedido": "llevar",
                 })
             else:
@@ -994,13 +978,13 @@ def simular(p: dict) -> dict:
                 n_local += 1
 
                 last.update({
-                    "r_tipo": r2(rt),
+                    "r_tipo": round(rt, 2),
                     "tipo_pedido": "local",
                 })
 
             # Se acumula el tiempo ocupado de caja para calcular ocupación.
             if caja_ini is not None:
-                caja_ac = r2(caja_ac + r2(reloj - caja_ini))
+                caja_ac += reloj - caja_ini
 
             # Si hay cola de caja, entra el siguiente cliente.
             # Si no hay cola, la caja queda libre.
@@ -1028,10 +1012,11 @@ def simular(p: dict) -> dict:
             fins = [m["fin"] for m in mostr]
             ei = fins.index(min(fins))
             cid = mostr[ei]["cli"]
+            last["evento_cliente_id"] = cid
 
             # Se acumula el tiempo ocupado de ese empleado.
             if mostr[ei]["ini"] is not None:
-                mostr[ei]["ac"] = r2(mostr[ei]["ac"] + r2(reloj - mostr[ei]["ini"]))
+                mostr[ei]["ac"] += reloj - mostr[ei]["ini"]
 
             # El empleado queda libre.
             mostr[ei].update({"est": "libre", "cli": None, "ini": None, "fin": INF})
@@ -1043,7 +1028,7 @@ def simular(p: dict) -> dict:
             if c["tipo"] == "llevar":
                 cerrar(cid, reloj)
             else:
-                rs = r2(rng.random())
+                rs = rng.random()
 
                 c["salon"] = "rojo" if rs < p["prob_rojo"] else "azul"
 
@@ -1053,7 +1038,7 @@ def simular(p: dict) -> dict:
                     n_azul += 1
 
                 last.update({
-                    "r_salon": r2(rs),
+                    "r_salon": rs,
                     "salon_elegido": c["salon"],
                 })
 
@@ -1070,6 +1055,7 @@ def simular(p: dict) -> dict:
             # -----------------------------------------------------------------
             # Se busca el cliente con menor hora de salida programada.
             cid = min(salida_sal, key=salida_sal.get)
+            last["evento_cliente_id"] = cid
             salida_sal.pop(cid)
 
             c = clientes.get(cid)
@@ -1095,7 +1081,7 @@ def simular(p: dict) -> dict:
             ctrl_most.append({"reloj": round(reloj, 2), "hora": fmt(reloj), "cola_most": len(cola_most)})
 
             # Programa el siguiente control.
-            prox_ctrl_m = r2(prox_ctrl_m + p["ctrl_most"])
+            prox_ctrl_m += p["ctrl_most"]
 
         elif ev == "ctrl_sal":
             # -----------------------------------------------------------------
@@ -1110,7 +1096,7 @@ def simular(p: dict) -> dict:
             })
 
             # Programa el siguiente control.
-            prox_ctrl_s = r2(prox_ctrl_s + p["ctrl_sal"])
+            prox_ctrl_s += p["ctrl_sal"]
 
         # Después de ejecutar el evento, se guarda la fila del vector de estado.
         snap(ev)
@@ -1122,21 +1108,21 @@ def simular(p: dict) -> dict:
     # -------------------------------------------------------------------------
     # Cálculo final de métricas
     # -------------------------------------------------------------------------
-    dur = r2(fin - p["hora_inicio"])
+    dur = fin - p["hora_inicio"]
 
     # Tiempo ocupado total de los tres empleados de mostrador.
-    ac_m = r2(sum(m["ac"] for m in mostr))
+    ac_m = sum(m["ac"] for m in mostr)
 
     metricas = {
-        "Prom. permanencia negocio (seg)": r2(ac_perm / n_perm) if n_perm else 0,
-        "Prom. tiempo cola caja (seg)": r2(ac_cc / n_cc) if n_cc else 0,
-        "Prom. tiempo cola mostrador (seg)": r2(ac_cm / n_cm) if n_cm else 0,
-        "% Ocupación caja": r2(caja_ac / dur * 100),
-        "% Ocupación empleados mostrador": r2(ac_m / (3 * dur) * 100),
+        "Prom. permanencia negocio (seg)": ac_perm / n_perm if n_perm else 0,
+        "Prom. tiempo cola caja (seg)": ac_cc / n_cc if n_cc else 0,
+        "Prom. tiempo cola mostrador (seg)": ac_cm / n_cm if n_cm else 0,
+        "% Ocupación caja": caja_ac / dur * 100,
+        "% Ocupación empleados mostrador": ac_m / (3 * dur) * 100,
         "Máx. cola caja": max_cc,
         "Máx. cola mostrador": max_cm,
-        "AC tiempo salón rojo lleno (seg)": r2(ac_r_lleno),
-        "AC tiempo salón azul lleno (seg)": r2(ac_a_lleno),
+        "AC tiempo salón rojo lleno (seg)": ac_r_lleno,
+        "AC tiempo salón azul lleno (seg)": ac_a_lleno,
         "Clientes finalizados": n_perm,
         "Para llevar": n_llevar,
         "En local": n_local,
@@ -1165,6 +1151,36 @@ def simular(p: dict) -> dict:
 # Estas estructuras permiten mostrar el vector de estado con encabezados agrupados.
 # La simulación sigue generando un DataFrame normal, pero esta sección lo renderiza
 # como una tabla HTML con grupos como "Proxima Llegada", "Empleado Caja", etc.
+
+# Colores por grupo (encabezado nivel 1)
+GRUPO_COLORES = {
+    "":                        "#2d2d2d",
+    "Proxima Llegada":         "#4a4a1a",
+    "Fin Atencion Caja":       "#4a2a1a",
+    "Consumo Local":           "#1a3a2a",
+    "Para Llevar":             "#2a1a4a",
+    "Eleccion Salon":          "#3a1a3a",
+    "Permanencia Salon Rojo":  "#4a1a1a",
+    "Permanencia Salon Azul":  "#1a2a4a",
+    "Empleado Caja":           "#3a2a1a",
+    "Mostrador 1":             "#1a3a3a",
+    "Mostrador 2":             "#1a3a3a",
+    "Mostrador 3":             "#1a3a3a",
+    "Cola Mostrador":          "#2a3a1a",
+    "Salon Rojo":              "#3a1a1a",
+    "Salon Azul":              "#1a1a3a",
+    "Acumuladores":            "#2a2a2a",
+}
+
+# Columnas que determinan el tiempo del próximo evento → se resaltan en amarillo
+COLS_PROXIMO_EVENTO = {
+    "Proxima Llegada",
+    "Fin Atencion Caja",
+    "Fin Preparacion CL",
+    "Fin Preparacion Llevar",
+    "Fin Perm. Rojo",
+    "Fin Perm. Azul",
+}
 
 GRUPOS = [
     ("", ["Iteracion", "Evento", "Reloj (seg)", "Hora"]),
@@ -1226,36 +1242,136 @@ def grupos_con_clientes(df: pd.DataFrame) -> list:
     return grupos
 
 
+def _intensificar(hex_color: str) -> str:
+    tabla = {
+        "#4a4a1a": "#c8b400",
+        "#4a2a1a": "#c85a00",
+        "#1a3a2a": "#00a060",
+        "#2a1a4a": "#7b2fff",
+        "#3a1a3a": "#cc00cc",
+        "#4a1a1a": "#e03030",
+        "#1a2a4a": "#2060e0",
+        "#3a2a1a": "#c07820",
+        "#1a3a3a": "#00a8a8",
+        "#2a3a1a": "#60b000",
+        "#3a1a1a": "#cc1010",
+        "#1a1a3a": "#1040cc",
+        "#2a2a2a": "#707070",
+    }
+    return tabla.get(hex_color, "#888888")
+
+
 def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
-    header1_parts = []
-    header2_parts = []
+    """
+    Construye una tabla HTML con dos niveles de encabezado.
+    - Primeras 3 columnas fijas (sticky).
+    - Encabezados coloreados por grupo.
+    - Columnas de próximo evento resaltadas en amarillo.
+    """
+    # Construye lista ordenada de columnas presentes
+    cols_ordenadas = []
+    for grupo, subcols in grupos:
+        for sc in subcols:
+            if sc in df.columns:
+                cols_ordenadas.append((grupo, sc))
+
+    # Primeras 4 columnas fijas: Iteracion, Evento, Reloj (seg), Hora
+        STICKY_WIDTHS = {"Iteracion": 70, "Evento": 120, "Reloj (seg)": 90, "Hora": 80}
+        sticky_cols = set(STICKY_WIDTHS.keys())
+
+        # Offsets acumulados para cada columna sticky
+        sticky_offsets = {}
+        acum = 0
+        for sc, w in STICKY_WIDTHS.items():
+            sticky_offsets[sc] = acum
+            acum += w
+
+    header1 = ""
+    header2 = ""
+    col_index = 0
     for grupo, subcols in grupos:
         presentes = [c for c in subcols if c in df.columns]
         if not presentes:
             continue
-        header1_parts.append(f'<th colspan="{len(presentes)}" style="text-align:center;border:1px solid #444;padding:4px;background:#2d2d2d">{grupo}</th>')
-        for sc in presentes:
-            header2_parts.append(f'<th style="text-align:center;border:1px solid #444;padding:4px;white-space:pre-wrap;max-width:80px;font-size:0.75em">{sc.replace(" ", "<br>")}</th>')
 
-    # Precalcula las columnas presentes para no repetir el chequeo por cada fila
-    cols_ordenadas = [sc for _, subcols in grupos for sc in subcols if sc in df.columns]
+        color_grupo = GRUPO_COLORES.get(grupo, "#2d2d2d")
 
-    row_parts = []
-    for _, row in df.iterrows():
-        cells = "".join(
-            f'<td style="text-align:center;border:1px solid #333;padding:3px;font-size:0.8em">{row.get(sc, "")}</td>'
-            for sc in cols_ordenadas
+        # Calcula si alguna columna del grupo es sticky para aplicar z-index mayor
+        primer_col = presentes[0]
+        es_sticky_grupo = primer_col in sticky_cols
+        z_header = "z-index:4" if es_sticky_grupo else "z-index:1"
+        # Para grupos sticky, el left debe coincidir con el offset de su primera columna
+        left_grupo = f"left:{sticky_offsets.get(primer_col, 0)}px;" if es_sticky_grupo else ""
+
+        header1 += (
+            f'<th colspan="{len(presentes)}" '
+            f'style="text-align:center;border:1px solid #555;padding:5px;'
+            f'background:{color_grupo};color:#eee;font-size:0.8em;'
+            f'position:sticky;top:0;{left_grupo}{z_header}">'
+            f'{grupo}</th>'
         )
-        row_parts.append(f"<tr>{cells}</tr>")
+
+        for sc in presentes:
+            es_proximo = sc in COLS_PROXIMO_EVENTO
+            bg_col = _intensificar(color_grupo) if es_proximo else color_grupo
+            es_sticky = sc in sticky_cols
+            w = STICKY_WIDTHS.get(sc, 82)
+            offset = sticky_offsets.get(sc, 0)
+            sticky = (
+                f"position:sticky;left:{offset}px;z-index:3;min-width:{w}px;max-width:{w}px;"
+                if es_sticky else f"min-width:82px;"
+            )
+            col_index += 1
+
+            header2 += (
+                f'<th style="text-align:center;border:1px solid #555;padding:4px;'
+                f'white-space:pre-wrap;font-size:0.72em;'
+                f'background:{bg_col};color:#ffffff;'
+                f'font-weight:{"bold" if es_proximo else "normal"};'
+                f'position:sticky;top:28px;{sticky}">'
+                f'{sc.replace(" ", "<br>")}</th>'
+            )
+
+    rows = ""
+    col_idx_map = {sc: i for i, (_, sc) in enumerate(cols_ordenadas)}
+    df_reset = df.reset_index(drop=True)
+    for idx, row in df_reset.iterrows():
+        # El reloj de la fila siguiente es el tiempo que "ganó" en esta fila
+        reloj_sig = df_reset.iloc[idx + 1]["Reloj (seg)"] if idx + 1 < len(df_reset) else None
+        rows += "<tr>"
+        for grupo, subcols in grupos:
+            for sc in subcols:
+                if sc in df.columns and sc != "_col_ganadora":
+                    val = row.get(sc, "")
+                    es_sticky = sc in sticky_cols
+                    w = STICKY_WIDTHS.get(sc, 82)
+                    offset = sticky_offsets.get(sc, 0)
+                    sticky = (
+                        f"position:sticky;left:{offset}px;z-index:1;background:#1a1a1a;min-width:{w}px;max-width:{w}px;"
+                        if es_sticky else "min-width:82px;"
+                    )
+                    # Pinta rojo si esta celda es de próximo evento y su valor coincide con el reloj siguiente
+                    es_ganadora = (
+                        sc in COLS_PROXIMO_EVENTO
+                        and reloj_sig is not None
+                        and val != ""
+                        and abs(float(val) - float(reloj_sig)) < 0.01
+                    )
+                    color_texto = "color:#ff4444;font-weight:bold;" if es_ganadora else ""
+                    rows += (
+                        f'<td style="text-align:center;border:1px solid #333;padding:3px;'
+                        f'font-size:0.8em;{sticky}{color_texto}">{val}</td>'
+                    )
+        rows += "</tr>"
 
     html = f"""
-    <div style="overflow-x:auto">
-    <table style="border-collapse:collapse;width:100%;font-family:monospace">
-        <thead>
-            <tr>{"".join(header1_parts)}</tr>
-            <tr>{"".join(header2_parts)}</tr>
+    <div style="overflow-x:auto;max-height:600px;overflow-y:auto">
+    <table style="border-collapse:collapse;font-family:monospace;table-layout:fixed">
+        <thead style="position:sticky;top:0;z-index:5">
+            <tr>{header1}</tr>
+            <tr>{header2}</tr>
         </thead>
-        <tbody>{"".join(row_parts)}</tbody>
+        <tbody>{rows}</tbody>
     </table>
     </div>
     """
@@ -1389,11 +1505,12 @@ j = st.session_state["j"]
 i = st.session_state["i"]
 
 # Crea las pestañas de visualización.
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Vector de Estado",
     "Métricas",
     "Controles Periódicos",
-    "Runge-Kutta"
+    "Runge-Kutta",
+    "Gráficos",
 ])
 
 # ── TAB 1: Vector de Estado ───────────────────────────────────────────────────
@@ -1407,11 +1524,6 @@ with tab1:
 
     # Selecciona i filas a partir de j.
     subset = df.iloc[j:j+i]
-
-    # Elimina columnas de clientes que no tienen ningún dato en este subset.
-    cols_cli = [c for c in subset.columns if re.match(r"C\d+ (ID|Estado|Hora Llegada|T Cola Caja|Permanencia)", c)]
-    cols_cli_vacias = [c for c in cols_cli if subset[c].isna().all()]
-    subset = subset.drop(columns=cols_cli_vacias)
 
     # Última fila, correspondiente al fin de simulación.
     ultima = df.iloc[[-1]]
@@ -1490,3 +1602,21 @@ with tab4:
         st.caption(f"Total de pasos RK calculados: {len(res['rk'])}")
     else:
         st.info("No se calcularon tablas RK en esta simulación")
+
+# ── TAB 5: Gráficos ───────────────────────────────────────────────────────────
+with tab5:
+    # Gráficos simples generados a partir del vector de estado.
+    df = res["vector"]
+
+    st.subheader("Cola caja a lo largo del tiempo")
+    st.line_chart(df.set_index("Reloj (seg)")["Cola Caja"])
+
+    st.subheader("Cola mostrador a lo largo del tiempo")
+    st.line_chart(df.set_index("Reloj (seg)")["Cola Mostrador"])
+
+    st.subheader("Ocupación salones")
+    sal_df = df[["Reloj (seg)","Salon Rojo Cantidad Espacio Ocupado","Salon Azul Cantidad Espacio Ocupado"]]
+    st.line_chart(sal_df.set_index("Reloj (seg)"))
+
+    st.subheader("Clientes vivos en el sistema")
+    st.area_chart(df.set_index("Reloj (seg)")["Clientes Vivos"])
