@@ -210,72 +210,97 @@ def rk_local(a_val: int, h: float = 0.01):
 # internos, pero la interfaz muestra nombres más legibles para la entrega.
 RENAME = {
     "iteracion": "Iteracion",
-    "evento": "Evento",
-    "reloj_seg": "Reloj (seg)",
-    "hora": "Hora",
-    "rnd1_llg": "RND1 llegada",
-    "rnd2_llg": "RND2 llegada",
-    "va1_llg": "VA1 llegada",
-    "va2_llg": "VA2 llegada",
-    "prox_llg": "Proxima Llegada",
-    "r_tipo": "RND tipo",
-    "tipo_pedido": "Tipo de Pedido",
-    "r_caja": "RND atencion",
-    "ta_caja": "Tiempo atencion",
-    "fin_caja": "Fin Atencion Caja",
-    "r_A": "RND CL",
-    "A": "Valor de A",
-    "tp_prep": "Tiempo de Preparacion CL",
-    "fin_prep_local": "Fin Preparacion CL",
-    "rnd1_llevar": "RND1 Para Llevar",
-    "rnd2_llevar": "RND2 Para Llevar",
-    "va1_llevar": "VA1 Para Llevar",
-    "va2_llevar": "VA2 Para Llevar",
-    "fin_prep_llevar": "Fin Preparacion Llevar",
+    "evento": "EVENTOS",
+    "reloj_seg": "RELOJ (segundos)",
+    "hora": "RELOJ (hh:mm:ss)",
+
+    # Llegada cliente
+    "rnd1_llg": "RND 1 Llegada",
+    "rnd2_llg": "RND 2 Llegada",
+    "va1_llg": "Tiempo Llegada 1",
+    "va2_llg": "Tiempo Llegada 2",
+    "prox_llg": "PROXIMA LLEGADA",
+
+    # Fin atención caja + definición de tipo de pedido
+    "r_caja": "RND Atencion Caja",
+    "ta_caja": "Duracion Atencion En Caja",
+    "fin_caja": "FIN ATENCION EN CAJA",
+    "r_tipo": "RND Tipo Pedido",
+    "tipo_pedido": "Tipo de Pedido del cliente",
+
+    # Fin preparación pedido local
+    "r_A": "RND A",
+    "A": "A",
+    "tp_prep": "TIEMPO PREPARACION PEDIDO LOCAL",
+
+    # Fin preparación pedido para llevar
+    "rnd1_llevar": "RND 1 Llevar",
+    "rnd2_llevar": "RND 2 Llevar",
+    "va1_llevar": "VA 1 Llevar",
+    "va2_llevar": "VA 2 Llevar",
+
+    # Próximos fines de preparación por empleado de mostrador
+    "m1_fin": "Fin Prep Mostrador 1",
+    "m2_fin": "Fin Prep Mostrador 2",
+    "m3_fin": "Fin Prep Mostrador 3",
+
+    # Elección de salón / fin comida
     "r_salon": "RND Salon",
-    "salon_elegido": "Salon",
-    "rnd1_sal_rojo": "RND1 Perm. Rojo",
-    "rnd2_sal_rojo": "RND2 Perm. Rojo",
-    "va1_sal_rojo": "VA1 Perm. Rojo",
-    "va2_sal_rojo": "VA2 Perm. Rojo",
-    "fin_sal_rojo": "Fin Perm. Rojo",
-    "rnd1_sal_azul": "RND1 Perm. Azul",
-    "rnd2_sal_azul": "RND2 Perm. Azul",
-    "va1_sal_azul": "VA1 Perm. Azul",
-    "va2_sal_azul": "VA2 Perm. Azul",
-    "fin_sal_azul": "Fin Perm. Azul",
+    "salon_elegido": "A QUE SALON VA",
+    "rnd1_sal_rojo": "RND 1 Comida Rojo",
+    "rnd2_sal_rojo": "RND 2 Comida Rojo",
+    "va1_sal_rojo": "tiempo de permanencia rojo 1",
+    "va2_sal_rojo": "tiempo de permanencia rojo 2",
+    "fin_sal_rojo": "FIN COMIDA EN SALON ROJO",
+    "rnd1_sal_azul": "RND 1 Comida Azul",
+    "rnd2_sal_azul": "RND 2 Comida Azul",
+    "va1_sal_azul": "tiempo de permanencia azul 1",
+    "va2_sal_azul": "tiempo de permanencia azul 2",
+    "fin_sal_azul": "FIN COMIDA EN SALON AZUL",
+
+    # Empleado caja
     "caja_est": "Estado Caja",
-    "caja_ini": "Hr Inicio Ocupacion",
-    "caja_ac": "AC Tiempo Ocupado",
-    "cola_caja": "Cola Caja",
-    "max_cola_caja": "MAX Cola Caja",
+    "caja_ini": "Tiempo Inicio OCUPADO Caja",
+    "caja_ac": "AC Tiempo Ocupado Caja",
+    "cola_caja": "COLA Clientes en Caja",
+    "max_cola_caja": "MAX cantidad clientes cola en caja",
+
+    # Empleados mostrador
     "m1_est": "M1 Estado", "m2_est": "M2 Estado", "m3_est": "M3 Estado",
-    "m1_ini": "M1 Hr Inicio", "m2_ini": "M2 Hr Inicio", "m3_ini": "M3 Hr Inicio",
-    "m1_ac": "M1 AC", "m2_ac": "M2 AC", "m3_ac": "M3 AC",
-    "cola_most": "Cola Mostrador",
-    "max_cola_most": "MAX Cola Mostrador",
-    "r_estado":    "Salon Rojo Estado",
-    "r_ocup":      "Salon Rojo Cantidad Espacio Ocupado",
-    "r_esp":       "Salon Rojo Cola Esperando",
-    "r_lleno_ini": "Salon Rojo Hr Inicio Lleno",
-    "r_ac_lleno":  "Salon Rojo AC Tiempo Lleno",
-    "a_estado":    "Salon Azul Estado",
-    "a_ocup":      "Salon Azul Cantidad Espacio Ocupado",
-    "a_esp":       "Salon Azul Cola Esperando",
-    "a_lleno_ini": "Salon Azul Hr Inicio Lleno",
-    "a_ac_lleno":  "Salon Azul AC Tiempo Lleno",
-    "ac_perm": "AC Tiempo Permanencia en Negocio",
-    "n_perm":  "N Clientes Finalizados",
-    "ac_cc":   "AC Tiempo Espera Cola Caja",
-    "n_cc":    "N Clientes Atendidos en Caja",
+    "m1_ini": "M1 Tiempo Inicio OCUPADO", "m2_ini": "M2 Tiempo Inicio OCUPADO", "m3_ini": "M3 Tiempo Inicio OCUPADO",
+    "m1_ac": "M1 AC Tiempo Ocupado", "m2_ac": "M2 AC Tiempo Ocupado", "m3_ac": "M3 AC Tiempo Ocupado",
+    "cola_most": "COLA MOSTRADOR",
+
+    # Salones
+    "r_estado":    "Rojo Estado",
+    "r_ocup":      "Rojo Cantidad Personas en Salon",
+    "r_esp":       "Rojo COLA",
+    "r_lleno_ini": "Rojo Tiempo inicio LLENO",
+    "r_ac_lleno":  "Rojo AC Tiempo Lleno",
+    "a_estado":    "Azul Estado",
+    "a_ocup":      "Azul Cantidad Personas en Salon",
+    "a_esp":       "Azul COLA",
+    "a_lleno_ini": "Azul Tiempo Inicio LLENO",
+    "a_ac_lleno":  "Azul AC Tiempo Lleno",
+
+    # Variables estadísticas
+    "ac_cc": "AC Tiempo Cola en Caja",
+    "n_cc": "CANTIDAD Clientes Iniciaron Atencion Caja",
+    "ac_perm": "AC tiempo permanencia en local",
+    "n_perm": "Cant. clientes que salieron del sistema",
+    "ac_mostr_total": "AC Tiempo Ocupado Empleados",
     "vivos": "Clientes Vivos",
 }
 
 # Etiquetas usadas para renombrar las columnas dinámicas de clientes vivos.
-# Ejemplo: cli3_t_cc pasa a mostrarse como C3 T Cola Caja.
+# Ejemplo: cli3_estado pasa a mostrarse como C3 ESTADO.
 CLI_FIELD_LABELS = {
-    "id": "ID", "est": "Estado", "llg": "Hora Llegada",
-    "t_cc": "T Cola Caja", "perm": "Permanencia",
+    "id": "ID",
+    "est": "ESTADO",
+    "llg": "Tiempo Llegada",
+    "tipo": "TIPO Pedido",
+    "salon": "SALON",
+    "salida": "Tiempo Salida",
 }
 
 
@@ -775,43 +800,149 @@ def simular(p: dict) -> dict:
             ac_a_lleno = r2(ac_a_lleno + r2(ahora - salon_a_lleno_ini))
             salon_a_lleno_ini = None
 
-    def clientes_visibles_para_vector(clientes_activos: list) -> list:
-        """
-        Selecciona una cantidad acotada de clientes para mostrar en el vector.
 
-        Esta función no modifica la lógica de la simulación: sólo decide qué
-        clientes se dibujan en la tabla visible. Se priorizan los clientes más
-        relevantes para la fila actual: cliente del evento, caja, mostrador,
-        colas, salones y, si todavía hay espacio, clientes activos recientes.
+    def estado_caja_vector(est: str) -> str:
+        """Estados de caja según el vector final del Excel."""
+        return {"libre": "L", "ocupado": "OC"}.get(est, est)
 
-        Las columnas se muestran como slots C1, C2, ..., Cn. El ID real del
-        cliente sigue apareciendo dentro de la columna ID. Esto evita crear miles
-        de columnas C11724, C11725, etc. cuando se corre con 100.000 iteraciones.
+    def estado_mostrador_vector(est: str) -> str:
+        """Estados de mostrador según el vector final del Excel."""
+        return {"libre": "L", "ocupado": "PP"}.get(est, est)
+
+    def estado_salon_vector(cantidad: int, capacidad: int) -> str:
+        """Estados de salón: Vacío, Con Lugar o Lleno."""
+        if cantidad <= 0:
+            return "V"
+        if cantidad >= capacidad:
+            return "LL"
+        return "CL"
+
+    def estado_cliente_vector(c: dict):
+        """Estados del objeto temporal cliente para mostrar en el vector."""
+        if c.get("est") == "retirado":
+            # El cliente ya no pertenece al sistema. En la fila del evento de salida
+            # se conserva el ID y el Tiempo Salida, pero no se fuerza un estado nuevo
+            # que no estaba en la definición del Excel.
+            return None
+
+        return {
+            "cola_caja": "EC",
+            "en_caja": "SAC",
+            "cola_most": "EM",
+            "prep": "SAM",
+            "en_salon": "C",
+            "esp_r": "ES",
+            "esp_a": "ES",
+        }.get(c.get("est"), c.get("est"))
+
+    def tipo_cliente_vector(c: dict):
+        if c.get("tipo") == "llevar":
+            return "LLEVAR"
+        if c.get("tipo") == "local":
+            return "LOCAL"
+        return None
+
+    def salon_cliente_vector(c: dict):
+        if c.get("salon") == "rojo":
+            return "ROJO"
+        if c.get("salon") == "azul":
+            return "AZUL"
+        return None
+
+    def tiempo_salida_cliente_vector(c: dict):
         """
-        if max_clientes_vector <= 0 or not clientes_activos:
+        Tiempo de salida visible del cliente.
+        - Para llevar: fin de preparación, porque ahí se retira.
+        - Local: fin de comida en salón, cuando ya fue programado.
+        """
+        if c.get("tipo") == "llevar":
+            return r2(c.get("fin_prep"))
+        if c.get("fin_salon") is not None:
+            return r2(c.get("fin_salon"))
+        return None
+
+    def nombre_evento_vector(evento: str) -> str:
+        """Nombres de eventos alineados con la versión final del Excel."""
+        cid = last.get("evento_cliente_id")
+
+        def con_cliente(nombre: str) -> str:
+            return f"{nombre}({cid})" if cid is not None else nombre
+
+        if evento == "inicializacion":
+            return "inicializacion"
+        if evento == "llegada":
+            return con_cliente("llegada_cliente")
+        if evento == "fin_caja":
+            return con_cliente("fin_atencion_caja")
+        if evento == "fin_prep":
+            c = clientes.get(cid, {})
+            if c.get("tipo") == "llevar":
+                return con_cliente("fin_preparacion_pedido_llevar")
+            if c.get("tipo") == "local":
+                return con_cliente("fin_preparacion_pedido_local")
+            return con_cliente("fin_preparacion")
+        if evento == "salida_salon":
+            c = clientes.get(cid, {})
+            if c.get("salon") == "azul":
+                return con_cliente("fin_comida_azul")
+            return con_cliente("fin_comida_rojo")
+        if evento == "ctrl_most":
+            return "control_cola_mostrador"
+        if evento == "ctrl_sal":
+            return "control_salones"
+        if evento == "fin_sim":
+            return "fin_sim"
+        return evento
+
+    # -------------------------------------------------------------------------
+    # Slots estables para el objeto temporal Cliente
+    # -------------------------------------------------------------------------
+    # Antes los clientes visibles se elegían de nuevo en cada fila y se dibujaban
+    # en C1, C2, C3, ... según prioridad de esa fila. Eso hacía que un mismo
+    # cliente se moviera de columna, o que una misma columna mostrara IDs distintos.
+    #
+    # Ahora, dentro del rango visible solicitado, cada ID real queda asociado a un
+    # slot fijo. Si el cliente deja el sistema, su slot queda vacío en las filas
+    # posteriores y no se reutiliza para otro cliente dentro del mismo vector visible.
+    cliente_slot_visible: Dict[int, int] = {}
+    slot_cliente_visible: Dict[int, int] = {}
+
+    def candidatos_clientes_para_vector(clientes_activos: list) -> list:
+        """
+        Devuelve IDs candidatos a ocupar slots de cliente en el vector visible.
+
+        La selección sigue siendo sólo visual: no modifica la lógica de simulación.
+        Se prioriza el cliente del evento, recursos ocupados, colas, salones y luego
+        clientes activos recientes. El cliente del evento se permite aunque se haya
+        retirado en esta misma fila, para que pueda verse su Tiempo Salida.
+        """
+        if max_clientes_vector <= 0:
             return []
 
         seleccionados = []
         vistos = set()
+        cid_evento = last.get("evento_cliente_id")
 
-        def agregar(cid):
+        def agregar(cid, permitir_retirado: bool = False):
             if cid is None or cid in vistos:
                 return
             c = clientes.get(cid)
-            if c is None or c.get("est") == "retirado":
+            if c is None:
+                return
+            if c.get("est") == "retirado" and not permitir_retirado:
                 return
             vistos.add(cid)
             seleccionados.append(cid)
 
         # 1) Cliente que disparó el evento actual.
-        agregar(last.get("evento_cliente_id"))
+        agregar(cid_evento, permitir_retirado=True)
 
         # 2) Cliente en caja y clientes atendidos/preparados por mostrador.
         agregar(caja_cli)
         for empleado in mostr:
             agregar(empleado.get("cli"))
 
-        # 3) Primeros clientes de las colas, porque son los más próximos a cambiar de estado.
+        # 3) Primeros clientes de las colas.
         for q in (cola_caja, cola_most, esp_r, esp_a):
             for cid in list(q):
                 agregar(cid)
@@ -820,7 +951,7 @@ def simular(p: dict) -> dict:
             if len(seleccionados) >= max_clientes_vector:
                 break
 
-        # 4) Algunos clientes en salón, priorizando los que salen antes.
+        # 4) Clientes en salón, priorizando los que salen antes.
         if len(seleccionados) < max_clientes_vector:
             en_salon = sorted(
                 list(salon_r | salon_a),
@@ -838,7 +969,24 @@ def simular(p: dict) -> dict:
                 if len(seleccionados) >= max_clientes_vector:
                     break
 
-        return [clientes[cid] for cid in seleccionados[:max_clientes_vector]]
+        return seleccionados
+
+    def asignar_slots_clientes(candidatos: list):
+        """Asigna slots fijos C1, C2, ... a IDs reales, sin reutilizarlos."""
+        if max_clientes_vector <= 0:
+            return
+
+        for cid in candidatos:
+            if cid in cliente_slot_visible:
+                continue
+            if len(slot_cliente_visible) >= max_clientes_vector:
+                break
+
+            for slot in range(1, max_clientes_vector + 1):
+                if slot not in slot_cliente_visible:
+                    cliente_slot_visible[cid] = slot
+                    slot_cliente_visible[slot] = cid
+                    break
 
     def snap(evento, force: bool = False):
         """
@@ -857,11 +1005,7 @@ def simular(p: dict) -> dict:
         row = {
             # Datos generales de la fila.
             "iteracion": it,
-            "evento": (
-                f"{evento}_c{last['evento_cliente_id']}"
-                if "evento_cliente_id" in last
-                else evento
-            ),
+            "evento": nombre_evento_vector(evento),
             "reloj_seg": r2(reloj),
             "hora": fmt(reloj),
 
@@ -933,21 +1077,23 @@ def simular(p: dict) -> dict:
             "fin_sal_azul": last.get("fin_sal_azul"),
             
             # Estado de la caja, cola de caja y acumulador de ocupación.
-            "caja_est": caja_est, "caja_cli": caja_cli,
+            "caja_est": estado_caja_vector(caja_est), "caja_cli": caja_cli,
             "caja_ini": None if caja_ini is None else r2(caja_ini),
             "cola_caja": len(cola_caja), "max_cola_caja": max_cc,
             "caja_ac": r2(caja_ac),
             
+            # Próximos fines de preparación por empleado.
+            **{f"m{i+1}_fin":   None if mostr[i]["fin"] == INF else r2(mostr[i]["fin"]) for i in range(3)},
+
             # Estado de los tres empleados del mostrador.
-            **{f"m{i+1}_est":   mostr[i]["est"]               for i in range(3)},
+            **{f"m{i+1}_est":   estado_mostrador_vector(mostr[i]["est"]) for i in range(3)},
             **{f"m{i+1}_cli":   mostr[i]["cli"]               for i in range(3)},
             **{f"m{i+1}_ini":   None if mostr[i]["ini"] is None else r2(mostr[i]["ini"]) for i in range(3)},
-            **{f"m{i+1}_fin":   None if mostr[i]["fin"]==INF else r2(mostr[i]["fin"]) for i in range(3)},
             **{f"m{i+1}_ac":    r2(mostr[i]["ac"])       for i in range(3)},
             "cola_most": len(cola_most), "max_cola_most": max_cm,
             # Ocupación y esperas de los salones.
-            "r_estado": "lleno" if len(salon_r) >= p["cap_r"] else "con capacidad",
-            "a_estado": "lleno" if len(salon_a) >= p["cap_a"] else "con capacidad",
+            "r_estado": estado_salon_vector(len(salon_r), p["cap_r"]),
+            "a_estado": estado_salon_vector(len(salon_a), p["cap_a"]),
             "r_ocup": len(salon_r), "a_ocup": len(salon_a),
             "r_esp": len(esp_r),    "a_esp": len(esp_a),
             "r_lleno_ini": r2(salon_r_lleno_ini) if salon_r_lleno_ini is not None else None,
@@ -956,18 +1102,37 @@ def simular(p: dict) -> dict:
             # Acumuladores y contadores usados para calcular métricas finales.
             "ac_perm": r2(ac_perm),  "n_perm":  n_perm,
             "ac_cc":   r2(ac_cc),    "n_cc":    n_cc,
+            "ac_mostr_total": r2(sum(m["ac"] for m in mostr)),
             "vivos": len(clientes_activos),
         }
 
         # Clientes visibles en el vector de estado.
-        # Se usan slots C1, C2, ..., Cn para que el ancho de la tabla sea estable.
-        # El ID real del cliente se muestra dentro de cada slot.
-        for slot, cv in enumerate(clientes_visibles_para_vector(clientes_activos), start=1):
-            row[f"cli{slot}_id"]   = cv["id"]
-            row[f"cli{slot}_est"]  = cv["est"]
-            row[f"cli{slot}_llg"]  = fmt(cv["llg"])
-            row[f"cli{slot}_t_cc"] = r2(cv.get("t_cc", 0))
-            row[f"cli{slot}_perm"] = r2(cv.get("perm", 0))
+        # Cada ID real mantiene siempre el mismo slot visual dentro del rango mostrado.
+        candidatos = candidatos_clientes_para_vector(clientes_activos)
+        asignar_slots_clientes(candidatos)
+
+        cid_evento = last.get("evento_cliente_id")
+        for slot in range(1, max_clientes_vector + 1):
+            cid = slot_cliente_visible.get(slot)
+            if cid is None:
+                continue
+
+            cv = clientes.get(cid)
+            if cv is None:
+                continue
+
+            # Si el cliente ya salió, sólo se lo conserva en la fila exacta del
+            # evento que lo hizo salir. En filas posteriores el slot queda vacío,
+            # pero no se reutiliza para otro cliente.
+            if cv.get("est") == "retirado" and cid != cid_evento:
+                continue
+
+            row[f"cli{slot}_id"]     = cv["id"]
+            row[f"cli{slot}_est"]    = estado_cliente_vector(cv)
+            row[f"cli{slot}_llg"]    = r2(cv["llg"])
+            row[f"cli{slot}_tipo"]   = tipo_cliente_vector(cv)
+            row[f"cli{slot}_salon"]  = salon_cliente_vector(cv)
+            row[f"cli{slot}_salida"] = tiempo_salida_cliente_vector(cv)
 
         nonlocal ultima_fila
         ultima_fila = row
@@ -1096,7 +1261,7 @@ def simular(p: dict) -> dict:
 
                 last.update({
                     "r_tipo": r2(rt),
-                    "tipo_pedido": "llevar",
+                    "tipo_pedido": "LLEVAR",
                 })
             else:
                 c["tipo"] = "local"
@@ -1104,7 +1269,7 @@ def simular(p: dict) -> dict:
 
                 last.update({
                     "r_tipo": r2(rt),
-                    "tipo_pedido": "local",
+                    "tipo_pedido": "LOCAL",
                 })
 
             # Se acumula el tiempo ocupado de caja para calcular ocupación.
@@ -1164,7 +1329,7 @@ def simular(p: dict) -> dict:
 
                 last.update({
                     "r_salon": r2(rs),
-                    "salon_elegido": c["salon"],
+                    "salon_elegido": c["salon"].upper(),
                 })
 
                 intentar_salon(cid, reloj)
@@ -1271,7 +1436,7 @@ def simular(p: dict) -> dict:
     df_vector = pd.DataFrame(vector).rename(columns=RENAME)
     cli_rename = {}
     for col in df_vector.columns:
-        m = re.match(r"cli(\d+)_(id|est|llg|t_cc|perm)", col)
+        m = re.match(r"cli(\d+)_(id|est|llg|tipo|salon|salida)", col)
         if m:
             k, campo = m.groups()
             cli_rename[col] = f"C{k} {CLI_FIELD_LABELS[campo]}"
@@ -1281,7 +1446,7 @@ def simular(p: dict) -> dict:
     if not df_ultima.empty:
         cli_rename_ultima = {}
         for col in df_ultima.columns:
-            m = re.match(r"cli(\d+)_(id|est|llg|t_cc|perm)", col)
+            m = re.match(r"cli(\d+)_(id|est|llg|tipo|salon|salida)", col)
             if m:
                 k, campo = m.groups()
                 cli_rename_ultima[col] = f"C{k} {CLI_FIELD_LABELS[campo]}"
@@ -1307,108 +1472,181 @@ def simular(p: dict) -> dict:
 # como una tabla HTML con grupos como "Proxima Llegada", "Empleado Caja", etc.
 
 GRUPOS = [
-    ("", ["Iteracion", "Evento", "Reloj (seg)", "Hora"]),
+    ("", ["Iteracion", "EVENTOS", "RELOJ (segundos)", "RELOJ (hh:mm:ss)"]),
 
-    ("Proxima Llegada", [
-        "RND1 llegada", "RND2 llegada", "VA1 llegada", "VA2 llegada", "Proxima Llegada"
+    ("LLEGADA CLIENTE", [
+        "RND 1 Llegada", "RND 2 Llegada", "Tiempo Llegada 1", "Tiempo Llegada 2", "PROXIMA LLEGADA"
     ]),
 
-    ("Fin Atencion Caja", [
-        "RND tipo", "Tipo de Pedido", "RND atencion", "Tiempo atencion", "Fin Atencion Caja"
+    ("FIN ATENCION CAJA", [
+        "RND Atencion Caja", "Duracion Atencion En Caja", "FIN ATENCION EN CAJA",
+        "RND Tipo Pedido", "Tipo de Pedido del cliente"
     ]),
 
-    ("Consumo Local", [
-        "RND CL", "Valor de A", "Tiempo de Preparacion CL", "Fin Preparacion CL"
+    ("FIN PREPARACION PEDIDO LOCAL", [
+        "RND A", "A", "TIEMPO PREPARACION PEDIDO LOCAL"
     ]),
 
-    ("Para Llevar", [
-        "RND1 Para Llevar", "RND2 Para Llevar", "VA1 Para Llevar", "VA2 Para Llevar", "Fin Preparacion Llevar"
+    ("FIN PREPARACION PEDIDO PARA LLEVAR", [
+        "RND 1 Llevar", "RND 2 Llevar", "VA 1 Llevar", "VA 2 Llevar"
     ]),
 
-    ("Eleccion Salon", [
-        "RND Salon", "Salon"
+    ("FIN PREPARACION", [
+        "Fin Prep Mostrador 1", "Fin Prep Mostrador 2", "Fin Prep Mostrador 3"
     ]),
 
-    ("Permanencia Salon Rojo", [
-        "RND1 Perm. Rojo", "RND2 Perm. Rojo", "VA1 Perm. Rojo", "VA2 Perm. Rojo", "Fin Perm. Rojo"
+    ("FIN COMIDA", [
+        "RND Salon", "A QUE SALON VA"
     ]),
 
-    ("Permanencia Salon Azul", [
-        "RND1 Perm. Azul", "RND2 Perm. Azul", "VA1 Perm. Azul", "VA2 Perm. Azul", "Fin Perm. Azul"
+    ("FIN COMIDA ROJO", [
+        "RND 1 Comida Rojo", "RND 2 Comida Rojo",
+        "tiempo de permanencia rojo 1", "tiempo de permanencia rojo 2", "FIN COMIDA EN SALON ROJO"
     ]),
 
-    ("Empleado Caja", [
-        "Estado Caja", "Hr Inicio Ocupacion", "AC Tiempo Ocupado", "Cola Caja", "MAX Cola Caja"
+    ("FIN COMIDA AZUL", [
+        "RND 1 Comida Azul", "RND 2 Comida Azul",
+        "tiempo de permanencia azul 1", "tiempo de permanencia azul 2", "FIN COMIDA EN SALON AZUL"
     ]),
 
-    ("Mostrador 1", ["M1 Estado", "M1 Hr Inicio", "M1 AC"]),
-    ("Mostrador 2", ["M2 Estado", "M2 Hr Inicio", "M2 AC"]),
-    ("Mostrador 3", ["M3 Estado", "M3 Hr Inicio", "M3 AC"]),
+    ("empleado CAJA", [
+        "Estado Caja", "Tiempo Inicio OCUPADO Caja", "AC Tiempo Ocupado Caja",
+        "COLA Clientes en Caja", "MAX cantidad clientes cola en caja"
+    ]),
 
-    ("Cola Mostrador", ["Cola Mostrador", "MAX Cola Mostrador"]),
-    ("Salon Rojo", ["Salon Rojo Estado", "Salon Rojo Cantidad Espacio Ocupado", "Salon Rojo Cola Esperando", "Salon Rojo Hr Inicio Lleno", "Salon Rojo AC Tiempo Lleno"]),
-    ("Salon Azul", ["Salon Azul Estado", "Salon Azul Cantidad Espacio Ocupado", "Salon Azul Cola Esperando", "Salon Azul Hr Inicio Lleno", "Salon Azul AC Tiempo Lleno"]),
-    ("Acumuladores", ["AC Tiempo Permanencia en Negocio", "N Clientes Finalizados", "AC Tiempo Espera Cola Caja", "N Clientes Atendidos en Caja"]),
+    ("Mostrador 1", ["M1 Estado", "M1 Tiempo Inicio OCUPADO", "M1 AC Tiempo Ocupado"]),
+    ("Mostrador 2", ["M2 Estado", "M2 Tiempo Inicio OCUPADO", "M2 AC Tiempo Ocupado"]),
+    ("Mostrador 3", ["M3 Estado", "M3 Tiempo Inicio OCUPADO", "M3 AC Tiempo Ocupado"]),
+
+    ("empleados MOSTRADOR", ["COLA MOSTRADOR"]),
+    ("ROJO", ["Rojo Estado", "Rojo Cantidad Personas en Salon", "Rojo COLA", "Rojo Tiempo inicio LLENO", "Rojo AC Tiempo Lleno"]),
+    ("AZUL", ["Azul Estado", "Azul Cantidad Personas en Salon", "Azul COLA", "Azul Tiempo Inicio LLENO", "Azul AC Tiempo Lleno"]),
+    ("VARIABLES ESTADISTICAS", [
+        "AC Tiempo Cola en Caja", "CANTIDAD Clientes Iniciaron Atencion Caja",
+        "AC tiempo permanencia en local", "Cant. clientes que salieron del sistema",
+        "AC Tiempo Ocupado Empleados"
+    ]),
 ]
 
+# Etiquetas visuales para que el encabezado se parezca al Excel aunque internamente
+# las columnas tengan nombres únicos.
+DISPLAY_COL_LABELS = {
+    "RND 1 Llegada": "RND 1",
+    "RND 2 Llegada": "RND 2",
+    "RND Atencion Caja": "RND",
+    "RND Tipo Pedido": "RND",
+    "RND 1 Llevar": "RND 1",
+    "RND 2 Llevar": "RND 2",
+    "VA 1 Llevar": "VA 1",
+    "VA 2 Llevar": "VA 2",
+    "Fin Prep Mostrador 1": "1",
+    "Fin Prep Mostrador 2": "2",
+    "Fin Prep Mostrador 3": "3",
+    "RND Salon": "RND",
+    "RND 1 Comida Rojo": "RND 1",
+    "RND 2 Comida Rojo": "RND 2",
+    "tiempo de permanencia rojo 1": "tiempo de permanencia 1",
+    "tiempo de permanencia rojo 2": "tiempo de permanencia 2",
+    "RND 1 Comida Azul": "RND 1",
+    "RND 2 Comida Azul": "RND 2",
+    "tiempo de permanencia azul 1": "tiempo de permanencia 1",
+    "tiempo de permanencia azul 2": "tiempo de permanencia 2",
+    "Estado Caja": "ESTADO",
+    "Tiempo Inicio OCUPADO Caja": "Tiempo Inicio OCUPADO",
+    "AC Tiempo Ocupado Caja": "AC Tiempo Ocupado",
+    "M1 Estado": "ESTADO",
+    "M1 Tiempo Inicio OCUPADO": "Tiempo Inicio OCUPADO",
+    "M1 AC Tiempo Ocupado": "AC Tiempo Ocupado",
+    "M2 Estado": "ESTADO",
+    "M2 Tiempo Inicio OCUPADO": "Tiempo Inicio OCUPADO",
+    "M2 AC Tiempo Ocupado": "AC Tiempo Ocupado",
+    "M3 Estado": "ESTADO",
+    "M3 Tiempo Inicio OCUPADO": "Tiempo Inicio OCUPADO",
+    "M3 AC Tiempo Ocupado": "AC Tiempo Ocupado",
+    "Rojo Estado": "ESTADO",
+    "Rojo Cantidad Personas en Salon": "Cantidad Personas en Salon",
+    "Rojo COLA": "COLA",
+    "Rojo Tiempo inicio LLENO": "Tiempo inicio LLENO",
+    "Rojo AC Tiempo Lleno": "AC Tiempo Lleno",
+    "Azul Estado": "ESTADO",
+    "Azul Cantidad Personas en Salon": "Cantidad Personas en Salon",
+    "Azul COLA": "COLA",
+    "Azul Tiempo Inicio LLENO": "Tiempo Inicio LLENO",
+    "Azul AC Tiempo Lleno": "AC Tiempo Lleno",
+}
+
 GRUPO_COLORES = {
-    "":                        "#2d2d2d",
-    "Proxima Llegada":         "#4a4a1a",
-    "Fin Atencion Caja":       "#4a2a1a",
-    "Consumo Local":           "#1a3a2a",
-    "Para Llevar":             "#2a1a4a",
-    "Eleccion Salon":          "#3a1a3a",
-    "Permanencia Salon Rojo":  "#4a1a1a",
-    "Permanencia Salon Azul":  "#1a2a4a",
-    "Empleado Caja":           "#3a2a1a",
-    "Mostrador 1":             "#1a3a3a",
-    "Mostrador 2":             "#1a3a3a",
-    "Mostrador 3":             "#1a3a3a",
-    "Cola Mostrador":          "#2a3a1a",
-    "Salon Rojo":              "#3a1a1a",
-    "Salon Azul":              "#1a1a3a",
-    "Acumuladores":            "#2a2a2a",
+    # Paleta similar al Excel, pero con tonos más oscuros/saturados para que
+    # el texto blanco se lea mejor en el tema oscuro de Streamlit.
+    "": "#2d2d2d",
+    "LLEGADA CLIENTE": "#3f7f2f",
+    "FIN ATENCION CAJA": "#4f86b8",
+    "FIN PREPARACION PEDIDO LOCAL": "#5f9b4c",
+    "FIN PREPARACION PEDIDO PARA LLEVAR": "#4f86b8",
+    "FIN PREPARACION": "#3f7f2f",
+    "FIN COMIDA": "#d87918",
+    "FIN COMIDA ROJO": "#c94c4c",
+    "FIN COMIDA AZUL": "#2f6fae",
+    "empleado CAJA": "#3f7f2f",
+    "Mostrador 1": "#4f86b8",
+    "Mostrador 2": "#4f86b8",
+    "Mostrador 3": "#4f86b8",
+    "empleados MOSTRADOR": "#4f86b8",
+    "ROJO": "#c94c4c",
+    "AZUL": "#2f6fae",
+    "VARIABLES ESTADISTICAS": "#4f86b8",
+    "CLIENTES": "#3f7f2f",
 }
 
 COLS_PROXIMO_EVENTO = {
-    "Proxima Llegada",
-    "Fin Atencion Caja",
-    "Fin Preparacion CL",
-    "Fin Preparacion Llevar",
-    "Fin Perm. Rojo",
-    "Fin Perm. Azul",
+    "PROXIMA LLEGADA",
+    "FIN ATENCION EN CAJA",
+    "Fin Prep Mostrador 1",
+    "Fin Prep Mostrador 2",
+    "Fin Prep Mostrador 3",
+    "FIN COMIDA EN SALON ROJO",
+    "FIN COMIDA EN SALON AZUL",
 }
 
 def _intensificar(hex_color: str) -> str:
+    """Color para columnas de próximo evento.
+
+    Mantiene el amarillo/naranja del Excel, pero con texto oscuro en el render
+    para que se lea bien.
+    """
     tabla = {
-        "#4a4a1a": "#c8b400",
-        "#4a2a1a": "#c85a00",
-        "#1a3a2a": "#00a060",
-        "#2a1a4a": "#7b2fff",
-        "#3a1a3a": "#cc00cc",
-        "#4a1a1a": "#e03030",
-        "#1a2a4a": "#2060e0",
-        "#3a2a1a": "#c07820",
-        "#1a3a3a": "#00a8a8",
-        "#2a3a1a": "#60b000",
-        "#3a1a1a": "#cc1010",
-        "#1a1a3a": "#1040cc",
-        "#2a2a2a": "#707070",
+        "#3f7f2f": "#f2df00",
+        "#4f86b8": "#f2df00",
+        "#5f9b4c": "#f2df00",
+        "#d87918": "#f08a1a",
+        "#c94c4c": "#f2df00",
+        "#2f6fae": "#f2df00",
+        "#2d2d2d": "#707070",
     }
-    return tabla.get(hex_color, "#888888")
+    return tabla.get(hex_color, "#f2df00")
+
+
+def _color_grupo(grupo: str) -> str:
+    """Devuelve color de encabezado, incluyendo grupos dinámicos de clientes."""
+    if grupo.startswith("Cliente "):
+        return GRUPO_COLORES["CLIENTES"]
+    return GRUPO_COLORES.get(grupo, "#2d2d2d")
 
 
 def grupos_con_clientes(df: pd.DataFrame) -> list:
     """
-    Agrega grupos de columnas para los clientes vivos que aparezcan en el DataFrame.
+    Agrega grupos de columnas para los clientes que aparezcan en el DataFrame.
 
-    Como la cantidad de clientes vivos cambia durante la simulación, sus columnas
-    no pueden estar fijas en GRUPOS. Por eso se detectan con una expresión regular.
+    El vector usa slots C1, C2, ... para mantener estable el ancho de la tabla.
+    Dentro de cada slot se muestra el ID real del cliente.
     """
     cli_nums = sorted({int(m.group(1)) for c in df.columns if (m := re.match(r"C(\d+) ID", c))})
     grupos = list(GRUPOS)
     for k in cli_nums:
-        grupos.append((f"Cliente {k}", [f"C{k} ID", f"C{k} Estado", f"C{k} Hora Llegada", f"C{k} T Cola Caja", f"C{k} Permanencia"]))
+        grupos.append((f"Cliente {k}", [
+            f"C{k} ID", f"C{k} ESTADO", f"C{k} Tiempo Llegada",
+            f"C{k} TIPO Pedido", f"C{k} SALON", f"C{k} Tiempo Salida"
+        ]))
     return grupos
 
 
@@ -1419,7 +1657,7 @@ def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
             if sc in df.columns and sc != "_col_ganadora":
                 cols_ordenadas.append((grupo, sc))
 
-    STICKY_WIDTHS = {"Iteracion": 70, "Evento": 120, "Reloj (seg)": 90, "Hora": 80}
+    STICKY_WIDTHS = {"Iteracion": 70, "EVENTOS": 160, "RELOJ (segundos)": 110, "RELOJ (hh:mm:ss)": 100}
     sticky_cols = set(STICKY_WIDTHS.keys())
     sticky_offsets = {}
     acum = 0
@@ -1435,7 +1673,7 @@ def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
         if not presentes:
             continue
 
-        color_grupo = GRUPO_COLORES.get(grupo, "#2d2d2d")
+        color_grupo = _color_grupo(grupo)
         primer_col = presentes[0]
         es_sticky_grupo = primer_col in sticky_cols
         z_header = "z-index:4" if es_sticky_grupo else "z-index:1"
@@ -1444,7 +1682,7 @@ def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
         header1 += (
             f'<th colspan="{len(presentes)}" '
             f'style="text-align:center;border:1px solid #555;padding:5px;'
-            f'background:{color_grupo};color:#eee;font-size:0.8em;'
+            f'background:{color_grupo};color:#ffffff;font-size:0.8em;font-weight:bold;'
             f'position:sticky;top:0;{left_grupo}{z_header}">'
             f'{grupo}</th>'
         )
@@ -1461,20 +1699,23 @@ def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
             )
             col_index += 1
 
+            color_texto_header = "#111111" if es_proximo else "#ffffff"
+            peso_header = "bold" if es_proximo else "normal"
+
             header2 += (
                 f'<th style="text-align:center;border:1px solid #555;padding:4px;'
                 f'white-space:pre-wrap;font-size:0.72em;'
-                f'background:{bg_col};color:#ffffff;'
-                f'font-weight:{"bold" if es_proximo else "normal"};'
+                f'background:{bg_col};color:{color_texto_header};'
+                f'font-weight:{peso_header};'
                 f'position:sticky;top:28px;{sticky}">'
-                f'{sc.replace(" ", "<br>")}</th>'
+                f'{DISPLAY_COL_LABELS.get(sc, sc).replace(" ", "<br>").replace(chr(10), "<br>")}</th>'
             )
 
     rows = ""
     col_idx_map = {sc: i for i, (_, sc) in enumerate(cols_ordenadas)}
     df_reset = df.reset_index(drop=True)
     for idx, row in df_reset.iterrows():
-        reloj_sig = df_reset.iloc[idx + 1]["Reloj (seg)"] if idx + 1 < len(df_reset) else None
+        reloj_sig = df_reset.iloc[idx + 1]["RELOJ (segundos)"] if idx + 1 < len(df_reset) else None
         rows += "<tr>"
         for grupo, subcols in grupos:
             for sc in subcols:
@@ -1610,13 +1851,13 @@ with st.sidebar:
     j_it = st.number_input("Desde iteración j", value=0, min_value=0, step=1)
     i_it = st.number_input("Mostrar i iteraciones", value=50, min_value=1, step=10)
     max_clientes_vector = st.number_input(
-        "Máx. clientes a mostrar por fila",
+        "Máx. clientes a mostrar en el rango",
         value=30,
         min_value=0,
         max_value=200,
         step=5,
         help=(
-            "Limita sólo la cantidad de columnas de clientes en el vector visible. "
+            "Cada cliente conserva su columna dentro del rango visible. "
             "No cambia la lógica ni las métricas de la simulación."
         ),
     )
@@ -1726,7 +1967,7 @@ with tab1:
     subset = df
 
     # Elimina columnas de clientes que no tienen ningún dato en este subset.
-    cols_cli = [c for c in subset.columns if re.match(r"C\d+ (ID|Estado|Hora Llegada|T Cola Caja|Permanencia)", c)]
+    cols_cli = [c for c in subset.columns if re.match(r"C\d+ (ID|ESTADO|Tiempo Llegada|TIPO Pedido|SALON|Tiempo Salida)", c)]
     cols_cli_vacias = [c for c in cols_cli if subset[c].isna().all()]
     subset = subset.drop(columns=cols_cli_vacias)
 
@@ -1746,13 +1987,13 @@ with tab1:
     # En la última fila se ocultan columnas temporales de RNDs, porque el enunciado
     # permite no mostrar objetos/variables temporales en la fila final.
     cols_temp = [
-        "RND1 llegada", "RND2 llegada", "VA1 llegada", "VA2 llegada",
-        "RND tipo", "RND atencion", "Tiempo atencion",
-        "RND CL", "Valor de A", "Tiempo de Preparacion CL",
-        "RND1 Para Llevar", "RND2 Para Llevar", "VA1 Para Llevar", "VA2 Para Llevar",
+        "RND 1 Llegada", "RND 2 Llegada", "Tiempo Llegada 1", "Tiempo Llegada 2",
+        "RND Atencion Caja", "Duracion Atencion En Caja",
+        "RND Tipo Pedido", "RND A", "A", "TIEMPO PREPARACION PEDIDO LOCAL",
+        "RND 1 Llevar", "RND 2 Llevar", "VA 1 Llevar", "VA 2 Llevar",
         "RND Salon",
-        "RND1 Perm. Rojo", "RND2 Perm. Rojo", "VA1 Perm. Rojo", "VA2 Perm. Rojo",
-        "RND1 Perm. Azul", "RND2 Perm. Azul", "VA1 Perm. Azul", "VA2 Perm. Azul",
+        "RND 1 Comida Rojo", "RND 2 Comida Rojo", "tiempo de permanencia rojo 1", "tiempo de permanencia rojo 2",
+        "RND 1 Comida Azul", "RND 2 Comida Azul", "tiempo de permanencia azul 1", "tiempo de permanencia azul 2",
     ]
 
     # Para la última fila se eliminan las columnas temporales.
