@@ -757,7 +757,11 @@ def simular(p: dict) -> dict:
         row = {
             # Datos generales de la fila.
             "iteracion": it,
-            "evento": evento,
+            "evento": (
+                f"{evento}_c{last['evento_cliente_id']}"
+                if "evento_cliente_id" in last
+                else evento
+            ),
             "reloj_seg": r2(reloj),
             "hora": fmt(reloj),
 
@@ -949,6 +953,7 @@ def simular(p: dict) -> dict:
                 cola_caja.append(nxt_id)
                 max_cc = max(max_cc, len(cola_caja))
 
+            last["evento_cliente_id"] = nxt_id
             nxt_id += 1
 
             # Se programa la próxima llegada usando Box-Muller completo.
@@ -972,6 +977,7 @@ def simular(p: dict) -> dict:
             # -----------------------------------------------------------------
             # El cliente que estaba en caja pasa al mostrador.
             nonlocal_cid = caja_cli
+            last["evento_cliente_id"] = nonlocal_cid
             c = clientes[nonlocal_cid]
             c["est"] = "cola_most"
             c["llg_most"] = r2(reloj)
@@ -1028,6 +1034,7 @@ def simular(p: dict) -> dict:
             fins = [m["fin"] for m in mostr]
             ei = fins.index(min(fins))
             cid = mostr[ei]["cli"]
+            last["evento_cliente_id"] = cid
 
             # Se acumula el tiempo ocupado de ese empleado.
             if mostr[ei]["ini"] is not None:
@@ -1070,6 +1077,7 @@ def simular(p: dict) -> dict:
             # -----------------------------------------------------------------
             # Se busca el cliente con menor hora de salida programada.
             cid = min(salida_sal, key=salida_sal.get)
+            last["evento_cliente_id"] = cid
             salida_sal.pop(cid)
 
             c = clientes.get(cid)
@@ -1211,6 +1219,52 @@ GRUPOS = [
     ("Acumuladores", ["AC Tiempo Permanencia en Negocio", "N Clientes Finalizados", "AC Tiempo Espera Cola Caja", "N Clientes Atendidos en Caja"]),
 ]
 
+GRUPO_COLORES = {
+    "":                        "#2d2d2d",
+    "Proxima Llegada":         "#4a4a1a",
+    "Fin Atencion Caja":       "#4a2a1a",
+    "Consumo Local":           "#1a3a2a",
+    "Para Llevar":             "#2a1a4a",
+    "Eleccion Salon":          "#3a1a3a",
+    "Permanencia Salon Rojo":  "#4a1a1a",
+    "Permanencia Salon Azul":  "#1a2a4a",
+    "Empleado Caja":           "#3a2a1a",
+    "Mostrador 1":             "#1a3a3a",
+    "Mostrador 2":             "#1a3a3a",
+    "Mostrador 3":             "#1a3a3a",
+    "Cola Mostrador":          "#2a3a1a",
+    "Salon Rojo":              "#3a1a1a",
+    "Salon Azul":              "#1a1a3a",
+    "Acumuladores":            "#2a2a2a",
+}
+
+COLS_PROXIMO_EVENTO = {
+    "Proxima Llegada",
+    "Fin Atencion Caja",
+    "Fin Preparacion CL",
+    "Fin Preparacion Llevar",
+    "Fin Perm. Rojo",
+    "Fin Perm. Azul",
+}
+
+def _intensificar(hex_color: str) -> str:
+    tabla = {
+        "#4a4a1a": "#c8b400",
+        "#4a2a1a": "#c85a00",
+        "#1a3a2a": "#00a060",
+        "#2a1a4a": "#7b2fff",
+        "#3a1a3a": "#cc00cc",
+        "#4a1a1a": "#e03030",
+        "#1a2a4a": "#2060e0",
+        "#3a2a1a": "#c07820",
+        "#1a3a3a": "#00a8a8",
+        "#2a3a1a": "#60b000",
+        "#3a1a1a": "#cc1010",
+        "#1a1a3a": "#1040cc",
+        "#2a2a2a": "#707070",
+    }
+    return tabla.get(hex_color, "#888888")
+
 
 def grupos_con_clientes(df: pd.DataFrame) -> list:
     """
@@ -1227,35 +1281,101 @@ def grupos_con_clientes(df: pd.DataFrame) -> list:
 
 
 def render_tabla_multinivel(df: pd.DataFrame, grupos: list) -> str:
-    header1_parts = []
-    header2_parts = []
+    cols_ordenadas = []
     for grupo, subcols in grupos:
-        presentes = [c for c in subcols if c in df.columns]
+        for sc in subcols:
+            if sc in df.columns and sc != "_col_ganadora":
+                cols_ordenadas.append((grupo, sc))
+
+    STICKY_WIDTHS = {"Iteracion": 70, "Evento": 120, "Reloj (seg)": 90, "Hora": 80}
+    sticky_cols = set(STICKY_WIDTHS.keys())
+    sticky_offsets = {}
+    acum = 0
+    for sc, w in STICKY_WIDTHS.items():
+        sticky_offsets[sc] = acum
+        acum += w
+
+    header1 = ""
+    header2 = ""
+    col_index = 0
+    for grupo, subcols in grupos:
+        presentes = [c for c in subcols if c in df.columns and c != "_col_ganadora"]
         if not presentes:
             continue
-        header1_parts.append(f'<th colspan="{len(presentes)}" style="text-align:center;border:1px solid #444;padding:4px;background:#2d2d2d">{grupo}</th>')
-        for sc in presentes:
-            header2_parts.append(f'<th style="text-align:center;border:1px solid #444;padding:4px;white-space:pre-wrap;max-width:80px;font-size:0.75em">{sc.replace(" ", "<br>")}</th>')
 
-    # Precalcula las columnas presentes para no repetir el chequeo por cada fila
-    cols_ordenadas = [sc for _, subcols in grupos for sc in subcols if sc in df.columns]
+        color_grupo = GRUPO_COLORES.get(grupo, "#2d2d2d")
+        primer_col = presentes[0]
+        es_sticky_grupo = primer_col in sticky_cols
+        z_header = "z-index:4" if es_sticky_grupo else "z-index:1"
+        left_grupo = f"left:{sticky_offsets.get(primer_col, 0)}px;" if es_sticky_grupo else ""
 
-    row_parts = []
-    for _, row in df.iterrows():
-        cells = "".join(
-            f'<td style="text-align:center;border:1px solid #333;padding:3px;font-size:0.8em">{row.get(sc, "")}</td>'
-            for sc in cols_ordenadas
+        header1 += (
+            f'<th colspan="{len(presentes)}" '
+            f'style="text-align:center;border:1px solid #555;padding:5px;'
+            f'background:{color_grupo};color:#eee;font-size:0.8em;'
+            f'position:sticky;top:0;{left_grupo}{z_header}">'
+            f'{grupo}</th>'
         )
-        row_parts.append(f"<tr>{cells}</tr>")
+
+        for sc in presentes:
+            es_proximo = sc in COLS_PROXIMO_EVENTO
+            bg_col = _intensificar(color_grupo) if es_proximo else color_grupo
+            es_sticky = sc in sticky_cols
+            w = STICKY_WIDTHS.get(sc, 82)
+            offset = sticky_offsets.get(sc, 0)
+            sticky = (
+                f"position:sticky;left:{offset}px;z-index:3;min-width:{w}px;max-width:{w}px;"
+                if es_sticky else f"min-width:82px;"
+            )
+            col_index += 1
+
+            header2 += (
+                f'<th style="text-align:center;border:1px solid #555;padding:4px;'
+                f'white-space:pre-wrap;font-size:0.72em;'
+                f'background:{bg_col};color:#ffffff;'
+                f'font-weight:{"bold" if es_proximo else "normal"};'
+                f'position:sticky;top:28px;{sticky}">'
+                f'{sc.replace(" ", "<br>")}</th>'
+            )
+
+    rows = ""
+    col_idx_map = {sc: i for i, (_, sc) in enumerate(cols_ordenadas)}
+    df_reset = df.reset_index(drop=True)
+    for idx, row in df_reset.iterrows():
+        reloj_sig = df_reset.iloc[idx + 1]["Reloj (seg)"] if idx + 1 < len(df_reset) else None
+        rows += "<tr>"
+        for grupo, subcols in grupos:
+            for sc in subcols:
+                if sc in df.columns and sc != "_col_ganadora":
+                    val = row.get(sc, "")
+                    es_sticky = sc in sticky_cols
+                    w = STICKY_WIDTHS.get(sc, 82)
+                    offset = sticky_offsets.get(sc, 0)
+                    sticky = (
+                        f"position:sticky;left:{offset}px;z-index:1;background:#1a1a1a;min-width:{w}px;max-width:{w}px;"
+                        if es_sticky else "min-width:82px;"
+                    )
+                    es_ganadora = (
+                        sc in COLS_PROXIMO_EVENTO
+                        and reloj_sig is not None
+                        and val != ""
+                        and abs(float(val) - float(reloj_sig)) < 0.01
+                    )
+                    color_texto = "color:#ff4444;font-weight:bold;" if es_ganadora else ""
+                    rows += (
+                        f'<td style="text-align:center;border:1px solid #333;padding:3px;'
+                        f'font-size:0.8em;{sticky}{color_texto}">{val}</td>'
+                    )
+        rows += "</tr>"
 
     html = f"""
-    <div style="overflow-x:auto">
-    <table style="border-collapse:collapse;width:100%;font-family:monospace">
-        <thead>
-            <tr>{"".join(header1_parts)}</tr>
-            <tr>{"".join(header2_parts)}</tr>
+    <div style="overflow-x:auto;max-height:600px;overflow-y:auto">
+    <table style="border-collapse:collapse;font-family:monospace;table-layout:fixed">
+        <thead style="position:sticky;top:0;z-index:5">
+            <tr>{header1}</tr>
+            <tr>{header2}</tr>
         </thead>
-        <tbody>{"".join(row_parts)}</tbody>
+        <tbody>{rows}</tbody>
     </table>
     </div>
     """
