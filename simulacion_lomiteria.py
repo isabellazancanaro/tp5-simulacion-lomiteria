@@ -21,6 +21,7 @@ from __future__ import annotations
 # Librerías matemáticas, aleatorias y de expresiones regulares.
 import math
 import random
+import time
 # re se usa para detectar y renombrar dinámicamente las columnas de clientes vivos.
 import re
 from collections import deque
@@ -295,8 +296,28 @@ def simular(p: dict) -> dict:
 
     # Variables principales de reloj y control de iteraciones.
     reloj = p["hora_inicio"]
-    fin = p["hora_fin"]
+
+    # Criterio de corte de la simulación:
+    # - "tiempo": la simulación termina al llegar a hora_fin.
+    # - "iteraciones": la simulación termina al alcanzar max_it eventos, sin cortar por hora_fin.
+    modo_corte = p.get("modo_corte", "tiempo")
+    corte_por_tiempo = modo_corte == "tiempo"
+    fin = p["hora_fin"] if corte_por_tiempo else INF
+
     it = 0
+    max_it = int(p["max_it"])
+
+    # Rango del vector de estado que se desea conservar en memoria.
+    # Se usa un límite superior exclusivo para mantener la misma lógica que df.iloc[j:j+i]:
+    # si guardar_desde = 100 y guardar_hasta_excl = 150, se guardan 50 filas.
+    guardar_desde = int(p.get("guardar_desde", 0))
+    guardar_hasta_excl = int(p.get("guardar_hasta_excl", max_it + 1))
+
+    # Cantidad máxima de objetos cliente que se dibujan en cada fila visible.
+    # La simulación conserva todos los clientes internamente, pero el vector mostrado
+    # usa una ventana acotada de clientes para evitar tablas HTML enormes cuando
+    # se simulan muchas iteraciones y la cola crece demasiado.
+    max_clientes_vector = int(p.get("max_clientes_vector", 30))
 
     # Identificador incremental para cada cliente que llega al sistema.
     nxt_id = 1
@@ -363,12 +384,23 @@ def simular(p: dict) -> dict:
     # Cuando un cliente se va, se elimina de este diccionario.
     clientes: Dict[int, dict] = {}
 
-    # vector guarda una fila por cada evento ocurrido.
+    # vector guarda solamente las filas visibles solicitadas.
+    # La simulación corre completa, pero no se conserva todo el vector en memoria.
     vector: List[dict] = []
+
+    # ultima_fila conserva siempre la última fotografía tomada, aunque no esté dentro
+    # del rango visible. Esto permite mostrar la fila final sin guardar el vector completo.
+    ultima_fila: Optional[dict] = None
 
     # rk_rows guarda todas las filas de Runge-Kutta generadas para pedidos locales.
     rk_rows: List[dict] = []
     rk_calculados: set = set()  # valores de A ya calculados, para no repetir la tabla
+
+    # Cache de Runge-Kutta.
+    # El tiempo de preparación local depende solamente de A y h_rk.
+    # Antes se recalculaba la misma tabla para cada cliente local, aunque A sólo puede valer 2, 3, 4 o 5.
+    # Ahora se calcula una vez por valor de A y se reutiliza el resultado.
+    rk_cache: Dict[tuple, tuple] = {}
 
     # Controles periódicos solicitados por el enunciado.
     ctrl_most: List[dict] = []
@@ -600,7 +632,12 @@ def simular(p: dict) -> dict:
         else:
             # Preparación para consumo local: se genera A y luego se calcula RK.
             ra, av = unif_disc(2, 5, rng)
-            tp, rk = rk_local(av, p["h_rk"])
+
+            clave_rk = (av, p["h_rk"])
+            if clave_rk not in rk_cache:
+                rk_cache[clave_rk] = rk_local(av, p["h_rk"])
+
+            tp, rk = rk_cache[clave_rk]
 
             # Solo se agrega la tabla RK si es la primera vez que aparece este valor de A.
             if av not in rk_calculados:
@@ -738,22 +775,85 @@ def simular(p: dict) -> dict:
             ac_a_lleno = r2(ac_a_lleno + r2(ahora - salon_a_lleno_ini))
             salon_a_lleno_ini = None
 
-    def snap(evento):
+    def clientes_visibles_para_vector(clientes_activos: list) -> list:
+        """
+        Selecciona una cantidad acotada de clientes para mostrar en el vector.
+
+        Esta función no modifica la lógica de la simulación: sólo decide qué
+        clientes se dibujan en la tabla visible. Se priorizan los clientes más
+        relevantes para la fila actual: cliente del evento, caja, mostrador,
+        colas, salones y, si todavía hay espacio, clientes activos recientes.
+
+        Las columnas se muestran como slots C1, C2, ..., Cn. El ID real del
+        cliente sigue apareciendo dentro de la columna ID. Esto evita crear miles
+        de columnas C11724, C11725, etc. cuando se corre con 100.000 iteraciones.
+        """
+        if max_clientes_vector <= 0 or not clientes_activos:
+            return []
+
+        seleccionados = []
+        vistos = set()
+
+        def agregar(cid):
+            if cid is None or cid in vistos:
+                return
+            c = clientes.get(cid)
+            if c is None or c.get("est") == "retirado":
+                return
+            vistos.add(cid)
+            seleccionados.append(cid)
+
+        # 1) Cliente que disparó el evento actual.
+        agregar(last.get("evento_cliente_id"))
+
+        # 2) Cliente en caja y clientes atendidos/preparados por mostrador.
+        agregar(caja_cli)
+        for empleado in mostr:
+            agregar(empleado.get("cli"))
+
+        # 3) Primeros clientes de las colas, porque son los más próximos a cambiar de estado.
+        for q in (cola_caja, cola_most, esp_r, esp_a):
+            for cid in list(q):
+                agregar(cid)
+                if len(seleccionados) >= max_clientes_vector:
+                    break
+            if len(seleccionados) >= max_clientes_vector:
+                break
+
+        # 4) Algunos clientes en salón, priorizando los que salen antes.
+        if len(seleccionados) < max_clientes_vector:
+            en_salon = sorted(
+                list(salon_r | salon_a),
+                key=lambda cid: salida_sal.get(cid, INF)
+            )
+            for cid in en_salon:
+                agregar(cid)
+                if len(seleccionados) >= max_clientes_vector:
+                    break
+
+        # 5) Completa con clientes activos más recientes.
+        if len(seleccionados) < max_clientes_vector:
+            for c in sorted(clientes_activos, key=lambda cv: cv["id"], reverse=True):
+                agregar(c["id"])
+                if len(seleccionados) >= max_clientes_vector:
+                    break
+
+        return [clientes[cid] for cid in seleccionados[:max_clientes_vector]]
+
+    def snap(evento, force: bool = False):
         """
         Toma una fotografía del sistema en el instante actual.
 
-        Esta función construye una fila del vector de estado.
-        Incluye:
-        - evento actual,
-        - reloj,
-        - RNDs usados en el evento,
-        - próximos eventos,
-        - estado de caja,
-        - estado de mostrador,
-        - estado de salones,
-        - acumuladores de métricas,
-        - todos los clientes vivos presentes en el sistema.
+        Para mejorar rendimiento, la fila completa del vector sólo se construye
+        cuando realmente se va a conservar: rango visible, fila final o force=True.
+        Esto evita armar miles de diccionarios grandes que después no se muestran.
         """
+        debe_guardar = force or (guardar_desde <= it < guardar_hasta_excl) or evento == "fin_sim"
+        if not debe_guardar:
+            return
+
+        clientes_activos = [cv for cv in clientes.values() if cv["est"] != "retirado"]
+
         row = {
             # Datos generales de la fila.
             "iteracion": it,
@@ -856,23 +956,21 @@ def simular(p: dict) -> dict:
             # Acumuladores y contadores usados para calcular métricas finales.
             "ac_perm": r2(ac_perm),  "n_perm":  n_perm,
             "ac_cc":   r2(ac_cc),    "n_cc":    n_cc,
-            "vivos": len(clientes),
+            "vivos": len(clientes_activos),
         }
-        # Clientes vivos en el sistema.
-        # A diferencia de versiones anteriores, acá no se limita a 3 clientes:
-        # se crean columnas dinámicas para todos los clientes que todavía no se fueron.
-        # Clientes vivos y retirados: columna fija por ID real.
-        # Los retirados mantienen sus columnas con estado "retirado".
-        # Solo clientes activos (no retirados) con columna fija por ID real.
-        for cv in clientes.values():
-            if cv["est"] == "retirado":
-                continue
-            cid = cv["id"]
-            row[f"cli{cid}_id"]   = cv["id"]
-            row[f"cli{cid}_est"]  = cv["est"]
-            row[f"cli{cid}_llg"]  = fmt(cv["llg"])
-            row[f"cli{cid}_t_cc"] = r2(cv.get("t_cc", 0))
-            row[f"cli{cid}_perm"] = r2(cv.get("perm", 0))
+
+        # Clientes visibles en el vector de estado.
+        # Se usan slots C1, C2, ..., Cn para que el ancho de la tabla sea estable.
+        # El ID real del cliente se muestra dentro de cada slot.
+        for slot, cv in enumerate(clientes_visibles_para_vector(clientes_activos), start=1):
+            row[f"cli{slot}_id"]   = cv["id"]
+            row[f"cli{slot}_est"]  = cv["est"]
+            row[f"cli{slot}_llg"]  = fmt(cv["llg"])
+            row[f"cli{slot}_t_cc"] = r2(cv.get("t_cc", 0))
+            row[f"cli{slot}_perm"] = r2(cv.get("perm", 0))
+
+        nonlocal ultima_fila
+        ultima_fila = row
         vector.append(row)
 
     # -------------------------------------------------------------------------
@@ -890,7 +988,7 @@ def simular(p: dict) -> dict:
     # 2) Se avanza el reloj a ese instante.
     # 3) Se ejecuta la lógica del evento.
     # 4) Se guarda una nueva fila del vector de estado.
-    while it < p["max_it"]:
+    while it < max_it:
         # Limpia los datos aleatorios del evento anterior.
         # Sólo se cargarán en last los RNDs usados en el evento actual.
         last = {}
@@ -904,26 +1002,31 @@ def simular(p: dict) -> dict:
         # Próxima salida de salón, si hay clientes en algún salón.
         fs = min(salida_sal.values()) if salida_sal else INF
 
-        # Diccionario con todos los posibles próximos eventos y sus tiempos.
-        times = {
-            "llegada": prox_llg,
-            "fin_caja": fc,
-            "fin_prep": fp,
-            "salida_salon": fs,
-            "ctrl_most": prox_ctrl_m,
-            "ctrl_sal": prox_ctrl_s,
-            "fin_sim": fin,
-        }
+        # Selección manual del próximo evento.
+        # Evita construir un diccionario y recorrerlo en cada iteración.
+        # Se conserva la prioridad anterior ante empates: llegada, fin_caja,
+        # fin_prep, salida_salon, ctrl_most, ctrl_sal y fin_sim.
+        ev = "llegada"
+        t_ev = prox_llg
 
-        # Selecciona el evento con menor tiempo programado.
-        ev = min(times, key=times.get)
-        reloj = r2(times[ev])
+        if fc < t_ev:
+            ev, t_ev = "fin_caja", fc
+        if fp < t_ev:
+            ev, t_ev = "fin_prep", fp
+        if fs < t_ev:
+            ev, t_ev = "salida_salon", fs
+        if prox_ctrl_m < t_ev:
+            ev, t_ev = "ctrl_most", prox_ctrl_m
+        if prox_ctrl_s < t_ev:
+            ev, t_ev = "ctrl_sal", prox_ctrl_s
+
+        # En modo por tiempo, fin_sim corta si es el próximo instante o si empata
+        # con otro evento. Esto mantiene la lógica previa del chequeo reloj >= fin.
+        if corte_por_tiempo and fin <= t_ev:
+            ev, t_ev = "fin_sim", fin
+
+        reloj = r2(t_ev)
         it += 1
-
-        # Si el próximo evento ocurre después del fin de simulación, se corta en fin_sim.
-        if reloj >= fin:
-            reloj = r2(fin)
-            ev = "fin_sim"
 
         if ev == "llegada":
             # -----------------------------------------------------------------
@@ -1127,10 +1230,22 @@ def simular(p: dict) -> dict:
         if ev == "fin_sim":
             break
 
+    # Si la simulación terminó por cantidad de iteraciones o por límite de seguridad,
+    # puede no existir una fila final explícita. Se agrega una fotografía final liviana
+    # con el estado alcanzado para conservar la vista de cierre de simulación.
+    if ultima_fila is None or ultima_fila.get("iteracion") != it or not str(ultima_fila.get("evento", "")).startswith("fin_sim"):
+        last = {}
+        snap("fin_sim", force=True)
+
     # -------------------------------------------------------------------------
     # Cálculo final de métricas
     # -------------------------------------------------------------------------
-    dur = r2(fin - p["hora_inicio"])
+    # La duración usada para las ocupaciones debe ser la duración realmente simulada.
+    # En modo por tiempo normalmente coincide con hora_fin - hora_inicio.
+    # En modo por iteraciones coincide con el reloj alcanzado al cortar por max_it.
+    dur = r2(reloj - p["hora_inicio"])
+    if dur <= 0:
+        dur = 0.01
 
     # Tiempo ocupado total de los tres empleados de mostrador.
     ac_m = r2(sum(m["ac"] for m in mostr))
@@ -1152,7 +1267,7 @@ def simular(p: dict) -> dict:
         "Salón azul": n_azul,
     }
 
-    # Se convierte el vector a DataFrame y se renombran columnas para que sean más claras.
+    # Se convierte el vector visible a DataFrame y se renombran columnas para que sean más claras.
     df_vector = pd.DataFrame(vector).rename(columns=RENAME)
     cli_rename = {}
     for col in df_vector.columns:
@@ -1161,8 +1276,25 @@ def simular(p: dict) -> dict:
             k, campo = m.groups()
             cli_rename[col] = f"C{k} {CLI_FIELD_LABELS[campo]}"
     df_vector = df_vector.rename(columns=cli_rename)
+
+    df_ultima = pd.DataFrame([ultima_fila]).rename(columns=RENAME) if ultima_fila else pd.DataFrame()
+    if not df_ultima.empty:
+        cli_rename_ultima = {}
+        for col in df_ultima.columns:
+            m = re.match(r"cli(\d+)_(id|est|llg|t_cc|perm)", col)
+            if m:
+                k, campo = m.groups()
+                cli_rename_ultima[col] = f"C{k} {CLI_FIELD_LABELS[campo]}"
+        df_ultima = df_ultima.rename(columns=cli_rename_ultima)
+
     return {
         "vector": df_vector,
+        "ultima_fila": df_ultima,
+        "total_iteraciones": it,
+        "modo_corte": modo_corte,
+        "reloj_final": r2(reloj),
+        "hora_final": fmt(reloj),
+        "duracion_simulada_seg": dur,
         "ctrl_most": pd.DataFrame(ctrl_most) if ctrl_most else pd.DataFrame(),
         "ctrl_sal":  pd.DataFrame(ctrl_sal)  if ctrl_sal  else pd.DataFrame(),
         "rk":        pd.DataFrame(rk_rows)   if rk_rows   else pd.DataFrame(),
@@ -1394,10 +1526,26 @@ with st.sidebar:
     # Semilla usada para reproducir la misma secuencia de números aleatorios.
     semilla = st.number_input("Semilla aleatoria", value=22, step=1)
 
+    st.subheader("Corte de simulación")
+    # Permite elegir si la simulación termina por hora fin o por cantidad exacta de eventos.
+    modo_corte_ui = st.radio(
+        "Finalizar simulación por",
+        ["Tiempo de simulación", "Cantidad de iteraciones"],
+        index=0,
+    )
+    modo_corte = "tiempo" if modo_corte_ui == "Tiempo de simulación" else "iteraciones"
+
     st.subheader("Tiempo simulación")
-    # Horas de inicio y fin de la simulación. Luego se convierten a segundos.
+    # La hora de inicio se usa en ambos modos. La hora fin solo corta la corrida en modo tiempo.
     h_ini = st.number_input("Hora inicio", 0, 23, 11)
-    h_fin = st.number_input("Hora fin", 0, 24, 15)
+    h_fin = st.number_input(
+        "Hora fin",
+        0,
+        24,
+        15,
+        disabled=(modo_corte == "iteraciones"),
+        help="Solo se usa cuando el criterio de corte es por tiempo.",
+    )
 
     st.subheader("Llegada de clientes (Normal)")
     # Parámetros de la distribución normal positiva de llegadas.
@@ -1437,13 +1585,41 @@ with st.sidebar:
     ctrl_sal_min = st.number_input("Cada N min → salones", value=30, min_value=1)
 
     st.subheader("Iteraciones")
-    # Límite máximo de iteraciones de la simulación.
-    max_it = st.number_input("Máx iteraciones", value=100000, min_value=1, step=1000)
+    # En modo por iteraciones, este valor es la cantidad de eventos a simular.
+    # En modo por tiempo, funciona como límite de seguridad para evitar corridas infinitas.
+    if modo_corte == "iteraciones":
+        max_it = st.number_input(
+            "Cantidad de iteraciones",
+            value=100000,
+            min_value=10,
+            max_value=100000,
+            step=1000,
+        )
+    else:
+        max_it = st.number_input(
+            "Límite máximo de iteraciones",
+            value=100000,
+            min_value=10,
+            max_value=100000,
+            step=1000,
+            help="Corte de seguridad. Normalmente la simulación termina antes, al llegar a la hora fin.",
+        )
 
     st.subheader("Filtro vector estado")
     # Permite mostrar i filas del vector a partir de una iteración j.
     j_it = st.number_input("Desde iteración j", value=0, min_value=0, step=1)
     i_it = st.number_input("Mostrar i iteraciones", value=50, min_value=1, step=10)
+    max_clientes_vector = st.number_input(
+        "Máx. clientes a mostrar por fila",
+        value=30,
+        min_value=0,
+        max_value=200,
+        step=5,
+        help=(
+            "Limita sólo la cantidad de columnas de clientes en el vector visible. "
+            "No cambia la lógica ni las métricas de la simulación."
+        ),
+    )
 
     # Botón que ejecuta la simulación.
     correr = st.button("▶ Simular", type="primary", use_container_width=True)
@@ -1452,7 +1628,10 @@ with st.sidebar:
 # Validaciones básicas de parámetros
 # -----------------------------------------------------------------------------
 errores = []
-if h_fin <= h_ini: errores.append("Hora fin debe ser mayor que hora inicio.")
+if modo_corte == "tiempo" and h_fin <= h_ini:
+    errores.append("Hora fin debe ser mayor que hora inicio.")
+if not (10 <= int(max_it) <= 100000):
+    errores.append("La cantidad/límite de iteraciones debe estar entre 10 y 100.000.")
 if caja_b <= caja_a: errores.append("Máx caja debe ser > Mín caja.")
 
 # Si hay errores, se muestran y se detiene la app.
@@ -1469,6 +1648,7 @@ if correr:
     # Las horas se convierten a segundos.
     params = dict(
         semilla=int(semilla),
+        modo_corte=modo_corte,
         hora_inicio=int(h_ini) * 3600,
         hora_fin=int(h_fin) * 3600,
         media_llg=media_llg,
@@ -1485,18 +1665,29 @@ if correr:
         ctrl_most=ctrl_most_min * 60,
         ctrl_sal=ctrl_sal_min * 60,
         max_it=int(max_it),
+        guardar_desde=int(j_it),
+        guardar_hasta_excl=int(j_it) + int(i_it),
+        max_clientes_vector=int(max_clientes_vector),
     )
 
     # Muestra un spinner mientras corre la simulación.
     with st.spinner("Simulando..."):
+        t0 = time.perf_counter()
         res = simular(params)
+        res["tiempo_ejecucion_seg"] = r2(time.perf_counter() - t0)
 
     # Guarda los resultados en session_state para que no se pierdan al cambiar pestañas.
     st.session_state["res"] = res
     st.session_state["j"] = int(j_it)
     st.session_state["i"] = int(i_it)
 
-    st.success(f"Simulación completada – {len(res['vector'])} iteraciones")
+    criterio_txt = "por tiempo" if res.get("modo_corte") == "tiempo" else "por cantidad de iteraciones"
+    st.success(
+        f"Simulación completada {criterio_txt} – {res['total_iteraciones']} iteraciones "
+        f"| reloj final {res.get('hora_final')} "
+        f"| tiempo de ejecución {res.get('tiempo_ejecucion_seg', 0):.2f} s "
+        f"({len(res['vector'])} filas visibles guardadas)"
+    )
 
 # Si todavía no se simuló, se muestra un mensaje inicial y se corta la ejecución.
 if "res" not in st.session_state:
@@ -1518,15 +1709,21 @@ tab1, tab2, tab3, tab4 = st.tabs([
 
 # ── TAB 1: Vector de Estado ───────────────────────────────────────────────────
 with tab1:
-    # Vector completo generado por la simulación.
+    # Vector visible generado por la simulación.
+    # Ya viene filtrado desde simular(), por lo tanto no se hace iloc sobre un DataFrame gigante.
     df = res["vector"]
-    total = len(df)
+    total = res.get("total_iteraciones", len(df))
 
-    # Informa el rango de filas que se está mostrando.
-    st.markdown(f"**Total de filas:** {total}  |  Mostrando filas **{j}** a **{min(j+i, total)-1}**")
+    # Informa el rango solicitado y cuántas filas se conservaron realmente.
+    st.markdown(
+        f"**Total de iteraciones simuladas:** {total}  |  "
+        f"**Reloj final:** {res.get('hora_final', '-')}  |  "
+        f"**Filas visibles guardadas:** {len(df)}  |  "
+        f"Rango solicitado: **{j}** a **{j+i-1}**"
+    )
 
-    # Selecciona i filas a partir de j.
-    subset = df.iloc[j:j+i]
+    # Como df ya está filtrado, el subset visible es directamente el vector recibido.
+    subset = df
 
     # Elimina columnas de clientes que no tienen ningún dato en este subset.
     cols_cli = [c for c in subset.columns if re.match(r"C\d+ (ID|Estado|Hora Llegada|T Cola Caja|Permanencia)", c)]
@@ -1534,7 +1731,9 @@ with tab1:
     subset = subset.drop(columns=cols_cli_vacias)
 
     # Última fila, correspondiente al fin de simulación.
-    ultima = df.iloc[[-1]]
+    ultima = res.get("ultima_fila", pd.DataFrame())
+    if ultima.empty and not df.empty:
+        ultima = df.iloc[[-1]]
 
     # Genera los grupos de columnas, incluyendo los clientes vivos que aparezcan
     # dentro del intervalo seleccionado.
